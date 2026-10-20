@@ -36,6 +36,8 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje }: 
   const [historico, setHistorico] = useState(false);
   const [semTomador, setSemTomador] = useState(inicial.semTomador);
   const erros = estado.erros;
+  // Razão social que veio do cartão CNPJ fica travada (só muda trocando o CNPJ).
+  const nomeDaReceita = !clienteId && Boolean(endereco?.legalName);
 
   function usarSalvo(item: TomadorSalvo) {
     setClienteId(item.id); setDocumento(formatarDocumento(item.documento)); setNome(item.nome);
@@ -107,6 +109,7 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje }: 
               onChange={(e) => {
                 const valor = mascaraDocumento(e.target.value);
                 setDocumento(valor); setAviso("");
+                if (endereco) { setEndereco(null); setNome(""); setEmail(""); setTelefone(""); }
                 // CNPJ completo: puxa o cartão CNPJ (razão social, contato e endereço) na hora, sem precisar da lupa.
                 if (valor.replace(/\D/g, "").length === 14) pesquisar(valor);
               }}
@@ -118,7 +121,7 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje }: 
           </div>
         </Campo>
         <Campo rotulo="Nome/Razão Social" obrigatorio erro={erros.nome} id="nome" largura="meia">
-          <input id="nome" name="nome" value={nome} readOnly={Boolean(clienteId)} onChange={(e) => setNome(e.target.value)} />
+          <input id="nome" name="nome" value={nome} readOnly={Boolean(clienteId) || nomeDaReceita} title={nomeDaReceita ? "Razão social do cartão CNPJ (Receita): não pode ser alterada" : undefined} onChange={(e) => setNome(e.target.value)} />
         </Campo>
         {!clienteId ? <>
           <Campo rotulo="Telefone" id="telefone" largura="terco"><input id="telefone" name="telefone" value={telefone} onChange={(e) => setTelefone(e.target.value)} /></Campo>

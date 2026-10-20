@@ -54,7 +54,11 @@ export async function salvarPessoas(rascunhoId: string | null, _anterior: Estado
     else clienteId = "";
   }
   if (!semTomador && !tomador && documento.trim()) {
-    const novo = validarNovoTomador({ documento, nome: texto(formData, "nome"), email: texto(formData, "email") });
+    // CNPJ: a razão social é sempre a do cartão CNPJ (Receita), nunca a digitada.
+    const doc = normalizeTaxId(documento);
+    const cartao = doc.length === 14 ? await lookupCnpj(doc) : null;
+    const nomeOficial = cartao?.ok && cartao.customer.legalName ? cartao.customer.legalName : null;
+    const novo = validarNovoTomador({ documento, nome: nomeOficial ?? texto(formData, "nome"), email: texto(formData, "email") });
     if (!novo.ok) Object.assign(erros, novo.erros);
     else {
       const db = createAdminClient();

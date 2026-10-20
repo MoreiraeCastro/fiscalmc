@@ -245,3 +245,19 @@ select.pc-input { appearance: auto; }
 .pc-subnav a.ativo { background: var(--emerald); color: #fff; }
 .pc-escritorio { background: #fff; border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
 .pc-escritorio > .page { width: auto; margin: 0; padding: 20px 22px 32px; }
+
+/* ---- Seletor de empresa (menu suspenso do topo) ---- */
+.pc-seletor { position: relative; }
+.pc-seletor > button.pc-empresa { border: 0; background: transparent; cursor: pointer; text-align: left; font: inherit; }
+.pc-seletor > button.pc-empresa:hover, .pc-seletor > button[aria-expanded="true"] { background: var(--surface-2); }
+.pc-seletor-painel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: min(420px, calc(100vw - 24px)); display: grid; gap: 6px; padding: 8px; background: #fff; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 16px 40px rgba(8,34,64,.2); }
+.pc-seletor-busca { display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); }
+.pc-seletor-busca input { flex: 1; min-width: 0; min-height: 36px; border: 0; outline: 0; font-size: 14px; color: var(--ink); background: transparent; }
+.pc-seletor-busca:focus-within { border-color: var(--navy-3); box-shadow: 0 0 0 3px rgba(24,75,115,.12); }
+.pc-seletor-painel ul { list-style: none; margin: 0; padding: 0; max-height: min(420px, 60vh); overflow-y: auto; display: grid; gap: 2px; }
+.pc-seletor-painel li button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer; color: var(--ink); font: inherit; }
+.pc-seletor-painel li button:hover { background: var(--surface); }
+.pc-seletor-painel li button.atual { background: var(--emerald-soft); color: var(--emerald-dark); }
+.pc-seletor-painel strong { display: block; font-size: 13px; }
+.pc-seletor-painel small { display: block; font-size: 12px; color: var(--muted); }
+.pc-seletor-vazio { margin: 0; padding: 10px; font-size: 13px; color: var(--muted); }

@@ -1,11 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { BASE_PATH } from "@/lib/base-path";
 import type { ContextoContribuinte } from "@/lib/contribuinte/contexto";
 import { formatarDocumento } from "@/lib/contribuinte/formato";
 import { PortalNav } from "./portal-nav";
+import { SeletorEmpresa } from "./seletor-empresa";
 
 /** Moldura do emissor no formato do Portal Contribuinte: topo fixo com ícones, conteúdo em cartões, rodapé. */
 export function PortalShell({ contexto, children }: { contexto: ContextoContribuinte; children: React.ReactNode }) {
@@ -20,11 +21,9 @@ export function PortalShell({ contexto, children }: { contexto: ContextoContribu
         </Link>
         <PortalNav escritorio={escritorio} />
         <div className="pc-perfil">
-          {empresa ? (
-            trocar
-              ? <Link href="/contribuinte/empresa" className="pc-empresa" title="Trocar de empresa"><span><strong>{empresa.razaoSocial}</strong><small>{formatarDocumento(empresa.cnpj)}</small></span><ChevronDown size={16} aria-hidden /></Link>
-              : <span className="pc-empresa"><span><strong>{empresa.razaoSocial}</strong><small>{formatarDocumento(empresa.cnpj)}</small></span></span>
-          ) : <Link href="/contribuinte/empresa" className="pc-empresa vazia">Escolher empresa<ChevronDown size={16} aria-hidden /></Link>}
+          {trocar
+            ? <SeletorEmpresa atual={empresa} empresas={empresas.map(({ id, razaoSocial, cnpj, emissaoBloqueada, podeEmitir }) => ({ id, razaoSocial, cnpj, emissaoBloqueada, podeEmitir }))} />
+            : empresa ? <span className="pc-empresa"><span><strong>{empresa.razaoSocial}</strong><small>{formatarDocumento(empresa.cnpj)}</small></span></span> : null}
           <form action={logout}><button type="submit" className="pc-icone" title="Sair com segurança" aria-label="Sair com segurança"><LogOut size={19} aria-hidden /></button></form>
         </div>
       </div>

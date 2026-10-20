@@ -14,6 +14,7 @@ import { AMBIENTE_GERADOR, lerNfseOficial, SITUACAO_NFSE, type EnderecoOficial }
 import { relationOne } from "@/lib/presentation/relations";
 import { downloadAuthorizedFiscalArtifact } from "@/lib/nfse/artifacts/download";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isEventEnabled } from "@/lib/nfse/events/cancellation";
 
 export const metadata = { title: "Visualizar NFS-e" };
 
@@ -64,7 +65,8 @@ export default async function VisualizarNfse({ params, searchParams }: { params:
   const pedidoAberto = (pedidos ?? []).find((p) => ["REQUESTED", "UNDER_REVIEW", "APPROVED"].includes(p.status));
   const pedidoIncerto = (pedidos ?? []).find((p) => p.status === "UNKNOWN" || p.status === "PROCESSING");
   const substituida = nota.status === "CANCELLED" && substituta?.status === "ISSUED";
-  const eventosLiberados = process.env.ENABLE_NFSE_EVENTS === "true";
+  const cancelamentoLiberado = isEventEnabled("CANCELLATION");
+  const substituicaoLiberada = isEventEnabled("SUBSTITUTION");
   const producao = nota.environment === "PRODUCTION";
   const podeAgir = nota.status === "ISSUED" && !substituta && empresa.podeEmitir;
 
@@ -78,8 +80,8 @@ export default async function VisualizarNfse({ params, searchParams }: { params:
       <BotaoImprimir />
       <Link className="pc-botao secundario" href="/contribuinte/notas/emitidas"><FileText size={16} aria-hidden />NFS-e Emitidas</Link>
       <span className="pc-espaco" />
-      {podeAgir ? <BotaoSubstituir notaId={nota.id} liberado={eventosLiberados} /> : null}
-      {podeAgir && escritorio && !pedidoIncerto ? <CancelarNfse notaId={nota.id} liberado={eventosLiberados} producao={producao} motivoSugerido={pedidoAberto?.reason} abrir={filtros.acao === "cancelar"} /> : null}
+      {podeAgir ? <BotaoSubstituir notaId={nota.id} liberado={substituicaoLiberada} /> : null}
+      {podeAgir && escritorio && !pedidoIncerto ? <CancelarNfse notaId={nota.id} liberado={cancelamentoLiberado} producao={producao} motivoSugerido={pedidoAberto?.reason} abrir={filtros.acao === "cancelar"} /> : null}
       {podeAgir && !escritorio && !pedidoAberto && !pedidoIncerto ? <SolicitarCancelamento notaId={nota.id} /> : null}
     </div>
 

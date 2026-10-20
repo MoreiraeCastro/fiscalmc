@@ -113,7 +113,7 @@ export async function POST(request:Request){
     let substituted:{id:string;accessKey:string}|null=null;
     if(effective.substitution){
       stage="LOAD_DATA";
-      assertEventTransmissionEnabled(invoiceEnvironment);
+      assertEventTransmissionEnabled(invoiceEnvironment,"SUBSTITUTION");
       const{data:original}=await admin.from("invoices").select("id,status,access_key,environment").eq("id",effective.substitution.invoiceId).eq("organization_id",session.organizationId).maybeSingle();
       if(!original||!original.access_key||original.environment!==invoiceEnvironment||(original.status!=="ISSUED"&&!(existing&&original.status==="CANCELLED")))throw new SafeFiscalError("SUBSTITUTION_INVALID","Só dá para substituir uma NFS-e gerada desta empresa.");
       const{data:outras}=await admin.from("invoices").select("id").eq("substitutes_invoice_id",original.id).in("status",["READY","SUBMITTING","UNKNOWN","ISSUED"]).neq("idempotency_key",idempotencyKey);

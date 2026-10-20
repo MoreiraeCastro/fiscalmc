@@ -47,7 +47,7 @@ export async function cancelInvoice(input: { organizationId: string; invoiceId: 
   if (!nota || nota.status !== "ISSUED" || !nota.access_key) throw new SafeFiscalError("CANCELLATION_INVALID", "Só dá para cancelar uma NFS-e gerada.");
   if (!empresa) throw new SafeFiscalError("CANCELLATION_INVALID", "Empresa não encontrada.");
   const environment = nota.environment as NFSeEnvironment;
-  assertEventTransmissionEnabled(environment);
+  assertEventTransmissionEnabled(environment, "CANCELLATION");
 
   const agora = new Date().toISOString();
   const { data: aberta } = await db.from("cancellation_requests").select("id,status").eq("invoice_id", nota.id).in("status", ABERTOS).maybeSingle();

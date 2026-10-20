@@ -120,9 +120,20 @@ export async function findCancellationEvent(input: { http: EventHttp; environmen
   }
 }
 
+export type EventKind = "CANCELLATION" | "SUBSTITUTION";
+const EVENT_FLAGS: Record<EventKind, { env: string; label: string }> = {
+  CANCELLATION: { env: "ENABLE_NFSE_CANCELLATION", label: "O cancelamento" },
+  SUBSTITUTION: { env: "ENABLE_NFSE_SUBSTITUTION", label: "A substituição" },
+};
+
+/** Cada operação tem liberação própria: só é ligada depois de passar na Produção Restrita. */
+export function isEventEnabled(kind: EventKind) {
+  return process.env.NFSE_PROVIDER === "national" && process.env[EVENT_FLAGS[kind].env] === "true";
+}
+
 /** Transmissão de eventos só com liberação explícita (depois do teste na Produção Restrita). */
-export function assertEventTransmissionEnabled(environment: NFSeEnvironment) {
+export function assertEventTransmissionEnabled(environment: NFSeEnvironment, kind: EventKind) {
   if (process.env.NFSE_PROVIDER !== "national") throw new SafeFiscalError("EVENTS_NOT_ENABLED", "A transmissão nacional não está ativa neste servidor.");
-  if (process.env.ENABLE_NFSE_EVENTS !== "true") throw new SafeFiscalError("EVENTS_NOT_ENABLED", "Cancelamento e substituição pelo emissor ainda não foram liberados. Use o Emissor Nacional por enquanto.");
+  if (!isEventEnabled(kind)) throw new SafeFiscalError("EVENTS_NOT_ENABLED", `${EVENT_FLAGS[kind].label} pelo emissor ainda não foi liberado. Use o Emissor Nacional por enquanto.`);
   if (environment === "PRODUCTION" && process.env.ENABLE_NFSE_PRODUCTION !== "true") throw new SafeFiscalError("PRODUCTION_TRANSMISSION_NOT_AUTHORIZED", "A transmissão em Produção não está autorizada.");
 }

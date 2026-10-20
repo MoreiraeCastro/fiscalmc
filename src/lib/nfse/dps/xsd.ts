@@ -109,6 +109,10 @@ function runtimeSchemaContents(fileName:string,contents:string,environment:NFSeE
  */
 function restrictedRtcLayout(contents:string){
   const finNFSe='<xs:element name="finNFSe" type="TSRTCFinNFSe"/>';
+  // cServ: xDescServ passou para depois de cNBS/cIntContrib (SEFIN espera "cTribMun, cNBS, cIntContrib, xDescServ").
+  const xDescServ=contents.match(/<xs:element name="xDescServ" type="TSDesc2000">[\s\S]*?<\/xs:element>/)?.[0]??"";
+  const cIntContrib=contents.match(/<xs:element name="cIntContrib" type="TSCodigoInternoContribuinte" minOccurs="0">[\s\S]*?<\/xs:element>/)?.[0]??"";
+  if(xDescServ&&cIntContrib)contents=contents.replace(xDescServ,"").replace(cIntContrib,`${cIntContrib}${xDescServ}`);
   return contents
     .replace(/<xs:element name="finNFSe" type="TSRTCFinNFSe">[\s\S]*?<\/xs:element>/,"")
     .replace('<xs:element name="cLocEmi" type="TSCodMunIBGE">',`${finNFSe}<xs:element name="cLocEmi" type="TSCodMunIBGE">`)

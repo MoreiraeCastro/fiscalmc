@@ -102,3 +102,13 @@ export async function getShellIdentity(){
   const office=memberships?.some(item=>item.role==="SUPER_ADMIN"||item.role==="OFFICE_STAFF")??false;
   return{displayName:user.displayName,canAccessOffice:office};
 }
+
+export type PortalSession={client:NonNullable<Awaited<ReturnType<typeof createClient>>>;userId:string;displayName:string;memberships:{organizationId:string;role:SessionOrganization["role"]}[]};
+/** Portal Contribuinte: any signed-in user with at least one active membership (client or office). */
+export async function requirePortalSession():Promise<PortalSession>{
+  const {client,user}=await getAuthenticatedClient();
+  if(!client||!user)redirect("/login");
+  const {data}=await getActiveMemberships(user.id);
+  if(!data?.length)redirect("/login");
+  return{client,userId:user.id,displayName:user.displayName,memberships:data.map((item)=>({organizationId:item.organization_id,role:item.role}))};
+}

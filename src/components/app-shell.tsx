@@ -48,6 +48,7 @@ export function AppShell({ children, admin = false }: ShellProps) {
         {admin ? <div className="sidebar-ctas">
           <Link className="button primary" href="/admin/emissoes"><FileCheck2 size={18} aria-hidden />Emitir NFS-e</Link>
           <Link className="button secondary" href="/admin/empresas/nova"><Building2 size={18} aria-hidden />Nova empresa</Link>
+          <Link className="button secondary" href="/contribuinte"><FileText size={18} aria-hidden />Portal Contribuinte</Link>
         </div> : null}
         {admin?<Link className="nav-link role-switch" href={switchHref}><SwitchIcon size={19} aria-hidden />{switchLabel}</Link>:<Suspense fallback={null}><OfficeSwitch className="nav-link role-switch" href={switchHref} label={switchLabel} iconSize={19}/></Suspense>}
         <form action={logout}><button className="nav-link" type="submit"><LogOut size={19} aria-hidden />Sair</button></form>

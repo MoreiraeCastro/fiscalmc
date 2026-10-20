@@ -16,7 +16,7 @@ export type EmpresaContribuinte = {
   email: string | null;
   telefone: string | null;
   emissaoBloqueada: boolean;
-  /** O motor só emite com vínculo ativo do usuário nesta empresa (ver requireIssuanceContext). */
+  /** Escritório emite por qualquer empresa; cliente, só pela dele (ver resolveIssuanceContextFromMemberships). */
   podeEmitir: boolean;
 };
 
@@ -43,7 +43,7 @@ export const contextoContribuinte = cache(async (): Promise<ContextoContribuinte
     return {
       id: item.id, razaoSocial: item.legal_name, cnpj: item.tax_id, municipio: item.municipality_code, uf: item.state,
       email: item.email, telefone: item.phone, emissaoBloqueada: item.emission_blocked,
-      podeEmitir: escritorio ? papel === "SUPER_ADMIN" || papel === "OFFICE_STAFF" : papel === "CLIENT_USER",
+      podeEmitir: escritorio || papel === "CLIENT_USER",
     };
   });
   const escolhida = (await cookies()).get(COOKIE_EMPRESA)?.value;

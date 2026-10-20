@@ -29,12 +29,12 @@ describe("contexto de emissão", () => {
     })).toEqual({ organizationId: organizationA, actorUserId, actorType: "OFFICE", role: "OFFICE_STAFF" });
   });
 
-  it("bloqueia OFFICE sem membership na empresa selecionada", () => {
-    expect(() => resolveIssuanceContextFromMemberships({
+  it("OFFICE emite por qualquer empresa atendida, sem vínculo por empresa (escritório único)", () => {
+    expect(resolveIssuanceContextFromMemberships({
       actorUserId,
       requestedOrganizationId: organizationB,
       memberships: [{ organizationId: organizationA, role: "OFFICE_STAFF" }],
-    })).toThrow("FORBIDDEN_OFFICE_ISSUANCE");
+    })).toEqual({ organizationId: organizationB, actorUserId, actorType: "OFFICE", role: "OFFICE_STAFF" });
   });
 
   it("bloqueia ator sem membership ativa para emissão", () => {

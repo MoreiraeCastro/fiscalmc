@@ -20,13 +20,14 @@ export function resolveIssuanceContextFromMemberships(input: {
   );
 
   if (input.requestedOrganizationId) {
-    const membership = officeMemberships.find((item) => item.organizationId === input.requestedOrganizationId);
-    if (!membership) throw new Error("FORBIDDEN_OFFICE_ISSUANCE");
+    // Single-office platform (see 20260914140000_office_staff_sees_all_organizations): being office staff at all
+    // authorizes issuing for any client organization; a per-organization membership row is not required.
+    if (!officeMemberships.length) throw new Error("FORBIDDEN_OFFICE_ISSUANCE");
     return {
       organizationId: input.requestedOrganizationId,
       actorUserId: input.actorUserId,
       actorType: "OFFICE",
-      role: membership.role,
+      role: officeMemberships.some((item) => item.role === "SUPER_ADMIN") ? "SUPER_ADMIN" : "OFFICE_STAFF",
     };
   }
 

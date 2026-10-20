@@ -44,7 +44,7 @@ export default async function EmitidasPage({ searchParams }: { searchParams: Pro
       </form>
       {!filtrando ? <Aviso>São exibidas todas as notas da empresa, da mais recente para a mais antiga. Para um período, informe as datas e clique em <strong>Filtrar</strong>.</Aviso> : null}
       {linhas.length
-        ? <TabelaNotas linhas={linhas} municipio={nomeMunicipio(empresa.municipio)} escritorio={escritorio} empresaId={empresa.id} />
+        ? <TabelaNotas linhas={linhas} municipio={nomeMunicipio(empresa.municipio)} escritorio={escritorio} />
         : <p className="pc-vazio">{filtrando ? "Nenhuma NFS-e encontrada com esses filtros." : "Nenhuma NFS-e emitida ainda para esta empresa."}</p>}
       <footer className="pc-paginacao">
         <span>Total de {total} {total === 1 ? "registro" : "registros"}</span>

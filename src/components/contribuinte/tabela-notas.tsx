@@ -12,8 +12,8 @@ export function SituacaoNota({ status }: { status: string }) {
 }
 
 /** Tabela "NFS-e Emitidas": Geração · Emitida para · Competência · Município Emissor · Preço Serviço · Situação · ⋮ */
-export function TabelaNotas({ linhas, municipio, escritorio, empresaId }: { linhas: NotaLinha[]; municipio: string; escritorio: boolean; empresaId: string }) {
-  const rotas = rotasLegadas(escritorio, empresaId);
+export function TabelaNotas({ linhas, municipio, escritorio }: { linhas: NotaLinha[]; municipio: string; escritorio: boolean }) {
+  const rotas = rotasLegadas(escritorio);
   return <div className="pc-tabela-rolagem">
     <table className="pc-tabela">
       <thead><tr><th>Geração</th><th>Emitida para</th><th>Competência</th><th>Município Emissor</th><th className="num">Preço Serviço (R$)</th><th>Situação</th><th><span className="sr-only">Ações</span></th></tr></thead>
@@ -34,8 +34,8 @@ export function TabelaNotas({ linhas, municipio, escritorio, empresaId }: { linh
 }
 
 /** Versão curta da Página Principal: Geração · Emitida para · Valor · 👁 */
-export function TabelaUltimas({ linhas, escritorio, empresaId }: { linhas: NotaLinha[]; escritorio: boolean; empresaId: string }) {
-  const rotas = rotasLegadas(escritorio, empresaId);
+export function TabelaUltimas({ linhas, escritorio }: { linhas: NotaLinha[]; escritorio: boolean }) {
+  const rotas = rotasLegadas(escritorio);
   return <div className="pc-tabela-rolagem">
     <table className="pc-tabela">
       <thead><tr><th>Geração</th><th>Emitida para</th><th className="num">Valor (R$)</th><th><span className="sr-only">Visualizar</span></th></tr></thead>

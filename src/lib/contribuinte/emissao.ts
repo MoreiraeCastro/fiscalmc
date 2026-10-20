@@ -1,0 +1,128 @@
+import "server-only";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { relationOne } from "@/lib/presentation/relations";
+import { getServiceReadiness } from "@/lib/nfse/service-readiness";
+import { resolveFiscalConfiguration } from "@/lib/nfse/fiscal-rule-resolver";
+import { getConfiguredNFSeEnvironment } from "@/lib/nfse/environments";
+import type { DadosRascunho } from "./dps";
+
+export const TRIBUTACAO_ISSQN: Record<string, string> = { "1": "Operação Tributável", "2": "Imunidade", "3": "Exportação de Serviço", "4": "Não Incidência" };
+export const RETENCAO_ISSQN: Record<string, string> = { "1": "Não retido", "2": "Retido pelo Tomador", "3": "Retido pelo Intermediário" };
+const OPCAO_SIMPLES: Record<string, string> = { "1": "Não Optante", "2": "Optante - Microempreendedor Individual (MEI)", "3": "Optante - Microempresa ou Empresa de Pequeno Porte (ME/EPP)" };
+const APURACAO_SIMPLES: Record<string, string> = {
+  "1": "Tributos federais e municipal pelo SN",
+  "2": "Tributos federais pelo SN e ISSQN pela NFS-e",
+  "3": "Tributos federais e municipal pela NFS-e",
+};
+const REGIME_ESPECIAL: Record<string, string> = { "0": "Nenhum", "1": "Ato Cooperado", "2": "Estimativa", "3": "Microempresa Municipal", "4": "Notário ou Registrador", "5": "Profissional Autônomo", "6": "Sociedade de Profissionais", "9": "Outros" };
+
+export function ambienteEmissao() {
+  return getConfiguredNFSeEnvironment() === "PRODUCTION" ? "PRODUCAO" as const : "RESTRITA" as const;
+}
+
+type RegimeTecnico = { simpleNational?: string; simpleAssessment?: string; special?: string };
+function regimeDaConfiguracao(config: unknown): RegimeTecnico {
+  const raiz = (config ?? {}) as { regime?: RegimeTecnico; technical?: { regime?: RegimeTecnico } };
+  return raiz.technical?.regime ?? raiz.regime ?? {};
+}
+
+/** Bloco "EMITENTE DA NFS-E": o portal preenche sozinho a partir do cadastro; aqui vem do cadastro da empresa. */
+export async function dadosEmitente(empresaId: string) {
+  const db = createAdminClient();
+  const [{ data: empresa }, { data: perfil }] = await Promise.all([
+    db.from("organizations").select("legal_name,tax_id,municipal_registration,municipality_code,email,phone,postal_code,street,address_number,address_complement,neighborhood,state").eq("id", empresaId).single(),
+    db.from("tax_profiles").select("tax_regime,dps_configuration").eq("organization_id", empresaId).maybeSingle(),
+  ]);
+  const regime = regimeDaConfiguracao(perfil?.dps_configuration);
+  return {
+    razaoSocial: empresa?.legal_name ?? "",
+    cnpj: empresa?.tax_id ?? "",
+    inscricaoMunicipal: empresa?.municipal_registration ?? null,
+    municipio: empresa?.municipality_code ?? "",
+    email: empresa?.email ?? null,
+    telefone: empresa?.phone ?? null,
+    endereco: [empresa?.street, empresa?.address_number, empresa?.address_complement, empresa?.neighborhood].filter(Boolean).join(", "),
+    cep: empresa?.postal_code ?? null,
+    opcaoSimples: regime.simpleNational ? OPCAO_SIMPLES[regime.simpleNational] ?? regime.simpleNational : perfil?.tax_regime === "SIMPLES_NACIONAL" ? "Optante" : "Não Optante",
+    apuracaoSimples: regime.simpleAssessment ? APURACAO_SIMPLES[regime.simpleAssessment] ?? null : null,
+    regimeEspecial: regime.special ? REGIME_ESPECIAL[regime.special] ?? regime.special : null,
+    simples: regime.simpleNational ? regime.simpleNational !== "1" : perfil?.tax_regime === "SIMPLES_NACIONAL",
+  };
+}
+
+export type ServicoPronto = {
+  id: string; nome: string; codigo: string | null; descricaoCodigo: string | null; nbs: string | null;
+  municipioPrestacao: string | null; descricaoPadrao: string | null; tributacao: string | null; exigeAliquotaManual: boolean;
+};
+
+/** Serviços da empresa prontos para emitir (revisados pelo escritório). Fazem o papel do "Código de Tributação Nacional". */
+export async function servicosProntos(empresaId: string): Promise<ServicoPronto[]> {
+  const { data } = await createAdminClient().from("service_templates")
+    .select("id,name,default_description,active,workflow_status,national_service_code_id,national_tax_code,municipal_service_code,municipal_service_mapping_id,dps_municipal_tax_code,dps_municipal_tax_code_source,service_location_municipality_code,nbs_code,iss_taxation,iss_rate_source,fiscal_reference,reviewed_at,reviewed_by,national_service_codes(display_code,description)")
+    .eq("organization_id", empresaId).eq("active", true).in("workflow_status", ["REVIEWED", "AUTO_READY"]).order("name");
+  return (data ?? []).filter((item) => getServiceReadiness(item).ready).map((item) => {
+    const codigo = relationOne(item.national_service_codes as { display_code: string; description: string } | { display_code: string; description: string }[] | null);
+    return {
+      id: item.id, nome: item.name, codigo: codigo?.display_code ?? item.national_tax_code, descricaoCodigo: codigo?.description ?? null,
+      nbs: item.nbs_code, municipioPrestacao: item.service_location_municipality_code, descricaoPadrao: item.default_description,
+      tributacao: item.iss_taxation, exigeAliquotaManual: item.iss_taxation !== "3" && item.iss_taxation !== "4" && item.iss_rate_source !== "PARAMETRIZED_BY_NATIONAL" && !item.municipal_service_mapping_id,
+    };
+  });
+}
+
+export type TomadorSalvo = { id: string; documento: string | null; nome: string; email: string | null; telefone: string | null; municipio: string | null };
+
+/** "Últimos Tomadores": quem já está cadastrado para a empresa, do mais recente para o mais antigo. */
+export async function tomadoresSalvos(empresaId: string): Promise<TomadorSalvo[]> {
+  const { data } = await createAdminClient().from("customers").select("id,tax_id,legal_name,email,phone,municipality_code")
+    .eq("organization_id", empresaId).neq("person_type", "FOREIGN").order("updated_at", { ascending: false }).limit(300);
+  return (data ?? []).map((item) => ({ id: item.id, documento: item.tax_id, nome: item.legal_name, email: item.email, telefone: item.phone, municipio: item.municipality_code }));
+}
+
+export async function tomadorPorId(empresaId: string, id: string) {
+  const { data } = await createAdminClient().from("customers").select("id,tax_id,legal_name,email,phone,municipality_code,postal_code,street,address_number,address_complement,neighborhood,state")
+    .eq("organization_id", empresaId).eq("id", id).maybeSingle();
+  return data;
+}
+
+export type Previa = { tributacao: string; retencao: string; retido: boolean; aliquotaBp?: number; origemAliquota: string; aviso?: string };
+
+/**
+ * Tributação municipal que o motor vai usar, para mostrar nos passos 3 e 4 antes de emitir.
+ * Usa a mesma regra da emissão (resolveFiscalConfiguration); se não der para calcular agora, avisa em vez de inventar.
+ */
+export async function previaTributacao(empresaId: string, dados: DadosRascunho): Promise<Previa | null> {
+  if (!dados.servico || !dados.competencia) return null;
+  const db = createAdminClient();
+  const [{ data: empresa }, { data: perfil }, { data: servico }] = await Promise.all([
+    db.from("organizations").select("municipality_code").eq("id", empresaId).single(),
+    db.from("tax_profiles").select("tax_regime,reviewed_at,dps_configuration").eq("organization_id", empresaId).maybeSingle(),
+    db.from("service_templates").select("national_tax_code,municipal_service_code,dps_municipal_tax_code,nbs_code,iss_taxation,iss_rate_source,fiscal_reference").eq("organization_id", empresaId).eq("id", dados.servico.modeloId).maybeSingle(),
+  ]);
+  if (!empresa || !perfil || !servico) return null;
+  const manual = dados.valores?.aliquotaManualBp !== undefined && dados.valores.fonteAliquota
+    ? { manualRateBasisPoints: dados.valores.aliquotaManualBp, manualRateSourceNote: dados.valores.fonteAliquota } : {};
+  try {
+    const fiscal = await Promise.race([
+      resolveFiscalConfiguration({
+        organizationId: empresaId, municipalityCode: empresa.municipality_code, nationalTaxCode: servico.national_tax_code, municipalServiceCode: servico.municipal_service_code,
+        dpsMunicipalTaxCode: servico.dps_municipal_tax_code, nbsCode: servico.nbs_code, issTaxation: servico.iss_taxation, issRateSource: servico.iss_rate_source,
+        fiscalReference: servico.fiscal_reference, taxRegime: perfil.tax_regime, reviewedAt: perfil.reviewed_at, serviceDate: dados.competencia, dpsConfiguration: perfil.dps_configuration, ...manual,
+      }),
+      new Promise<never>((_, rejeitar) => setTimeout(() => rejeitar(new Error("TIMEOUT")), 10_000)),
+    ]);
+    const retido = fiscal.iss.withholdingType !== "1";
+    return {
+      tributacao: TRIBUTACAO_ISSQN[fiscal.iss.taxation] ?? fiscal.iss.taxation,
+      retencao: RETENCAO_ISSQN[fiscal.iss.withholdingType] ?? fiscal.iss.withholdingType,
+      retido,
+      aliquotaBp: fiscal.iss.rateBasisPoints,
+      origemAliquota: fiscal.iss.source === "OFFICE_PARAMETER" ? "informada pelo escritório" : fiscal.iss.rateBasisPoints === undefined ? "calculada pela Receita na emissão (parâmetros do município)" : "parâmetros do município",
+    };
+  } catch {
+    return {
+      tributacao: servico.iss_taxation ? TRIBUTACAO_ISSQN[servico.iss_taxation] ?? servico.iss_taxation : "—", retencao: "—", retido: false, origemAliquota: "—",
+      aviso: "Não foi possível calcular a prévia agora. A emissão ainda confere tudo de novo antes de transmitir.",
+    };
+  }
+}

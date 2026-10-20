@@ -6,19 +6,21 @@ import { exigirEmpresa } from "@/lib/contribuinte/contexto";
 import { formatarDocumento, hojeBrasilia } from "@/lib/contribuinte/formato";
 import { nomeMunicipio } from "@/lib/contribuinte/municipios";
 import { ultimasEmitidas } from "@/lib/contribuinte/notas";
+import { listarRascunhos } from "@/lib/contribuinte/rascunhos";
+import { TabelaRascunhos } from "@/components/contribuinte/tabela-rascunhos";
 
 export const metadata = { title: "Página Principal" };
 
 export default async function PaginaPrincipal() {
   const { empresa, escritorio, empresas } = await exigirEmpresa();
-  const ultimas = await ultimasEmitidas(empresa.id, hojeBrasilia());
+  const [ultimas, rascunhos] = await Promise.all([ultimasEmitidas(empresa.id, hojeBrasilia()), listarRascunhos(empresa.id, 5)]);
   return <>
     <Trilha itens={[]} />
     {empresa.emissaoBloqueada ? <Aviso tipo="alerta">A emissão desta empresa está <strong>bloqueada</strong> até o escritório concluir o cadastro (certificado, dados fiscais e serviços).</Aviso> : null}
     {!empresa.podeEmitir && !empresa.emissaoBloqueada ? <Aviso tipo="alerta">Seu usuário consulta esta empresa, mas ainda não tem permissão para emitir por ela.</Aviso> : null}
     <div className="pc-grade-inicio">
-      <Cartao titulo="Rascunhos" className="rascunhos">
-        <p className="pc-texto">A emissão de uma nova NFS-e é dividida em 4 passos. Ao passar para o próximo passo, as informações preenchidas serão salvas e listadas aqui, para você continuar depois.</p>
+      <Cartao titulo="Rascunhos" className="rascunhos" acoes={rascunhos.length ? <Link className="pc-link" href="/contribuinte/notas/rascunhos">Ver todos</Link> : null}>
+        {rascunhos.length ? <TabelaRascunhos linhas={rascunhos} completa={false} /> : <p className="pc-texto">A emissão de uma nova NFS-e é dividida em 4 passos. Ao passar para o próximo passo, as informações preenchidas serão salvas e listadas aqui, para você continuar depois.</p>}
       </Cartao>
       <Cartao titulo="Meus dados" className="dados">
         <dl className="pc-dados">
@@ -30,7 +32,7 @@ export default async function PaginaPrincipal() {
         </dl>
       </Cartao>
       <Cartao titulo="Últimas NFS-e emitidas nos últimos 30 dias" className="ultimas" acoes={<Link className="pc-link" href="/contribuinte/notas/emitidas">Ver todas</Link>}>
-        {ultimas.length ? <TabelaUltimas linhas={ultimas} escritorio={escritorio} empresaId={empresa.id} /> : <p className="pc-vazio">Nenhuma NFS-e emitida nos últimos 30 dias.</p>}
+        {ultimas.length ? <TabelaUltimas linhas={ultimas} escritorio={escritorio} /> : <p className="pc-vazio">Nenhuma NFS-e emitida nos últimos 30 dias.</p>}
       </Cartao>
       <Cartao titulo="Acesso Rápido" className="rapido">
         <div className="pc-atalhos">

@@ -22,6 +22,7 @@ export type EmpresaContribuinte = {
 
 export type ContextoContribuinte = {
   usuario: string;
+  usuarioId: string;
   escritorio: boolean;
   empresas: EmpresaContribuinte[];
   empresa: EmpresaContribuinte | null;
@@ -47,7 +48,7 @@ export const contextoContribuinte = cache(async (): Promise<ContextoContribuinte
   });
   const escolhida = (await cookies()).get(COOKIE_EMPRESA)?.value;
   const empresa = empresas.find((item) => item.id === escolhida) ?? (empresas.length === 1 ? empresas[0] : null);
-  return { usuario: session.displayName, escritorio, empresas, empresa };
+  return { usuario: session.displayName, usuarioId: session.userId, escritorio, empresas, empresa };
 });
 
 /** Para as páginas que dependem de uma empresa: sem empresa escolhida, vai para o seletor. */
@@ -58,9 +59,8 @@ export async function exigirEmpresa() {
 }
 
 /** Links que ainda apontam para as telas atuais, até o emissor novo ter a sua versão (passos 2 e 3). */
-export function rotasLegadas(escritorio: boolean, empresaId: string) {
+export function rotasLegadas(escritorio: boolean) {
   return {
-    novaNfse: escritorio ? `/admin/empresas/${empresaId}?tab=issue` : "/app/emitir",
     visualizar: (id: string) => (escritorio ? `/admin/notas/${id}` : `/app/notas/${id}`),
     documento: (id: string, tipo: "NFSE_XML" | "PDF") => (escritorio ? `/api/admin/invoices/${id}/artifacts/${tipo}` : `/api/invoices/${id}/artifacts/${tipo}`),
   };

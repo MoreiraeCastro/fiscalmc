@@ -20,5 +20,5 @@ export async function officeLogin(formData: FormData) {
     await client.auth.signOut();
     redirect("/login/escritorio?error=invalid_credentials");
   }
-  redirect("/admin");
+  redirect("/contribuinte");
 }

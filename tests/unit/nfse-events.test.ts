@@ -78,20 +78,33 @@ describe("transmissão do evento", () => {
 });
 
 describe("DPS de substituição (grupo subst)", () => {
-  function dps(substitution?: { accessKey: string; reasonCode: "01" | "99"; reason?: string }, semTomador = false) {
+  const IBSCBS = { finalConsumer: "0" as const, operationIndicator: "100301", destinationIndicator: "0" as const, cst: "000", classification: "000001" };
+  function dps(substitution?: { accessKey: string; reasonCode: "01" | "99"; reason?: string }, semTomador = false, environment: "1" | "2" = "2", ibsCbs?: typeof IBSCBS) {
     const document = buildFiscalDocument({ organization: { id: "o", taxId: "40241895000170", municipalRegistration: "01910680", municipalityCode: "3304557" }, customer: { taxId: "68644533000140", legalName: "ORLA RIO" }, service: { nationalTaxCode: "171901" }, taxConfiguration: { regime: "SIMPLES_NACIONAL", taxationType: "MUNICIPAL", iss: { withheld: false, source: "MUNICIPAL_INTEGRATION" }, ibsCbs: { customerFieldsEnabled: false } }, amountCents: 10000, serviceDate: "2026-10-20", description: "Serviços contábeis", dpsNumber: 7n, dpsSeries: "00001" });
-    const model = mapToDpsModel(document, { issuer: { taxId: "40241895000170", municipalRegistration: "01910680", name: "MOREIRA", emitName: false, emitAddress: false }, ...(semTomador ? {} : { customer: { taxId: "68644533000140", name: "ORLA RIO" } }), serviceLocation: { municipalityCode: "3304557" }, dpsMunicipalTaxCode: "001", nbsCode: "113022100", fiscal: { regime: { simpleNational: "3", simpleAssessment: "1", special: "0" }, iss: { taxation: "1", withholding: "1", rateSource: "PARAMETRIZED_BY_NATIONAL" }, totalTaxes: { indicator: "0" } }, emittedAt: "2026-10-20T12:00:00-03:00", applicationVersion: "t", environment: "2", ...(substitution ? { substitution } : {}) });
+    const model = mapToDpsModel(document, { issuer: { taxId: "40241895000170", municipalRegistration: "01910680", name: "MOREIRA", emitName: false, emitAddress: false }, ...(semTomador ? {} : { customer: { taxId: "68644533000140", name: "ORLA RIO" } }), serviceLocation: { municipalityCode: "3304557" }, dpsMunicipalTaxCode: "001", nbsCode: "113022100", fiscal: { regime: { simpleNational: "3", simpleAssessment: "1", special: "0" }, iss: { taxation: "1", withholding: "1", rateSource: "PARAMETRIZED_BY_NATIONAL" }, totalTaxes: { indicator: "0" } }, emittedAt: "2026-10-20T12:00:00-03:00", applicationVersion: "t", environment, ...(ibsCbs ? { ibsCbs } : {}), ...(substitution ? { substitution } : {}) });
     return buildDpsXml(model);
   }
   it("inclui subst logo depois de cLocEmi e passa no XSD", async () => {
     const xml = dps({ accessKey: CHAVE, reasonCode: "99", reason: "Correção da descrição do serviço prestado" });
-    expect(xml).toContain(`<cLocEmi>3304557</cLocEmi><subst><chSubstda>${CHAVE}</chSubstda><cMotivo>99</cMotivo><xMotivo>Correção da descrição do serviço prestado</xMotivo></subst><prest>`);
+    expect(xml).toContain(`<finNFSe>0</finNFSe><cLocEmi>3304557</cLocEmi><subst><chSubstda>${CHAVE}</chSubstda><cMotivo>99</cMotivo><xMotivo>Correção da descrição do serviço prestado</xMotivo></subst><prest>`);
     await expect(validateDpsXml(xml, "PRODUCTION_RESTRICTED")).resolves.toMatchObject({ valid: true });
-    await expect(validateDpsXml(xml, "PRODUCTION")).resolves.toMatchObject({ valid: true });
+    await expect(validateDpsXml(dps({ accessKey: CHAVE, reasonCode: "99", reason: "Correção da descrição do serviço prestado" }, false, "1"), "PRODUCTION")).resolves.toMatchObject({ valid: true });
   });
   it("Tomador/Adquirente não informado: DPS sem o grupo toma, válida no XSD", async () => {
-    const xml = dps(undefined, true);
-    expect(xml).not.toContain("<toma>");
+    expect(dps(undefined, true)).not.toContain("<toma>");
+    await expect(validateDpsXml(dps(undefined, true), "PRODUCTION_RESTRICTED")).resolves.toMatchObject({ valid: true });
+    await expect(validateDpsXml(dps(undefined, true, "1"), "PRODUCTION")).resolves.toMatchObject({ valid: true });
+  });
+  it("IBS/CBS no leiaute da restrita (finNFSe no topo, CST direto em trib)", async () => {
+    const xml = dps(undefined, false, "2", IBSCBS);
+    expect(xml).toContain("<tpEmit>1</tpEmit><finNFSe>0</finNFSe><cLocEmi>");
+    expect(xml).toContain("<IBSCBS><indFinal>0</indFinal><cIndOp>100301</cIndOp><indDest>0</indDest><valores><trib><CST>000</CST><cClassTrib>000001</cClassTrib></trib></valores></IBSCBS></infDPS>");
+    await expect(validateDpsXml(xml, "PRODUCTION_RESTRICTED")).resolves.toMatchObject({ valid: true });
+  });
+  it("IBS/CBS no leiaute publicado de produção (finNFSe e gIBSCBS dentro do grupo)", async () => {
+    const xml = dps(undefined, false, "1", IBSCBS);
+    expect(xml).not.toContain("<tpEmit>1</tpEmit><finNFSe>");
+    expect(xml).toContain("<IBSCBS><finNFSe>0</finNFSe><indFinal>0</indFinal><cIndOp>100301</cIndOp><indDest>0</indDest><valores><trib><gIBSCBS><CST>000</CST><cClassTrib>000001</cClassTrib></gIBSCBS></trib></valores></IBSCBS>");
     await expect(validateDpsXml(xml, "PRODUCTION")).resolves.toMatchObject({ valid: true });
   });
   it("sem substituição não muda a DPS", () => {

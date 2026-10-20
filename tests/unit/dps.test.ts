@@ -21,7 +21,9 @@ function modelWithIssuerMunicipalRegistration(emitMunicipalRegistration:boolean)
 }
 
 const fixturePath=new URL("../../fixtures/dps/minimal-valid-unsigned.xml",import.meta.url);
-async function fixture(){return readFile(fixturePath,"utf8");}
+/** A fixture segue o XSD publicado (produção); na restrita a SEFIN já exige finNFSe logo antes de cLocEmi. */
+async function fixtureProducao(){return readFile(fixturePath,"utf8");}
+async function fixture(){return (await fixtureProducao()).replace("<cLocEmi>","<finNFSe>0</finNFSe><cLocEmi>");}
 
 describe("DPS v1.01",()=>{
   it("forma o identificador conforme TSIdDPS",()=>expect(buildDpsIdentifier({municipalityCode:"3304557",taxId:"12345678000195",series:"00001",number:1n})).toBe("DPS330455721234567800019500001000000000000001"));
@@ -48,7 +50,7 @@ describe("DPS v1.01",()=>{
   it("valida a fixture sanitizada contra o XSD oficial",async()=>expect((await validateDpsXml(await fixture())).valid).toBe(true));
   it("valida a fixture contra o pacote oficial separado de Produção",async()=>{
     await expect(listDpsSchemaFiles("PRODUCTION")).resolves.toContain("DPS_v1.01.xsd");
-    await expect(validateDpsXml(await fixture(),"PRODUCTION")).resolves.toMatchObject({valid:true,errors:[]});
+    await expect(validateDpsXml(await fixtureProducao(),"PRODUCTION")).resolves.toMatchObject({valid:true,errors:[]});
   });
   it("inicializa o runtime WASM com um XSD mínimo",async()=>await expect(validateXsdRuntimeProbe()).resolves.toBeUndefined());
   it("rejeita XML inválido no XSD mínimo",()=>expect(validateMinimalXsd("<not-probe/>").valid).toBe(false));

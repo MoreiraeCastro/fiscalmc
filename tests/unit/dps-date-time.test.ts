@@ -28,6 +28,6 @@ describe("dhEmi da DPS", () => {
   it("continua válido no TSDateTimeUTC do XSD oficial", async () => {
     const xml = (await readFile(fixturePath, "utf8"))
       .replace("<dhEmi>2026-08-25T09:00:00-03:00</dhEmi>", `<dhEmi>${formatDpsDateTimeSaoPaulo(instant)}</dhEmi>`);
-    await expect(validateDpsXml(xml)).resolves.toMatchObject({ valid: true, errors: [] });
+    await expect(validateDpsXml(xml, "PRODUCTION")).resolves.toMatchObject({ valid: true, errors: [] });
   });
 });

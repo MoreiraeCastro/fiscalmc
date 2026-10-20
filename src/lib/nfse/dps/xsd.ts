@@ -96,8 +96,23 @@ async function loadDpsSchemas(environment:NFSeEnvironment){
  * supplied to this standards-compliant validator.
  */
 function runtimeSchemaContents(fileName:string,contents:string,environment:NFSeEnvironment){
+  if(environment==="PRODUCTION_RESTRICTED"&&fileName==="tiposComplexos_v1.01.xsd")return restrictedRtcLayout(contents);
   if(environment!=="PRODUCTION"||fileName!=="tiposSimples_v1.01.xsd")return contents;
   return contents.replace('value="^0{0,4}\\d{1,5}$"','value="0{0,4}\\d{1,5}"');
+}
+
+/**
+ * Produção Restrita runs a newer RTC layout than the published 20260727 bundle (seen 20/10/2026 in the
+ * government emitter's own DPS and in SEFIN's E1235 diagnostics): finNFSe moved from IBSCBS to infDPS right
+ * before cLocEmi (and is mandatory), and CST/cClassTrib sit directly under IBSCBS/valores/trib (no gIBSCBS).
+ * The official files stay untouched; only the runtime copy mirrors what SEFIN accepts.
+ */
+function restrictedRtcLayout(contents:string){
+  const finNFSe='<xs:element name="finNFSe" type="TSRTCFinNFSe"/>';
+  return contents
+    .replace(/<xs:element name="finNFSe" type="TSRTCFinNFSe">[\s\S]*?<\/xs:element>/,"")
+    .replace('<xs:element name="cLocEmi" type="TSCodMunIBGE">',`${finNFSe}<xs:element name="cLocEmi" type="TSCodMunIBGE">`)
+    .replace('<xs:element name="trib" type="TCRTCInfoTributosIBSCBS">','<xs:element name="trib" type="TCRTCInfoTributosSitClas">');
 }
 
 function registerOfficialSchemaProvider(schemas:Awaited<ReturnType<typeof loadDpsSchemas>>,environment:NFSeEnvironment){

@@ -141,6 +141,17 @@ export default async function VisualizarNfse({ params, searchParams }: { params:
           <div><dt>Valor líquido</dt><dd><strong>{rs(oficial?.valores.liquido)}</strong></dd></div>
         </dl>
       </Cartao>
+      {oficial?.ibsCbs ? <Cartao titulo="IBS/CBS">
+        <dl className="pc-resumo">
+          <div><dt>Situação / classificação</dt><dd>{oficial.ibsCbs.cst ?? "—"} / {oficial.ibsCbs.classificacao ?? "—"}</dd></div>
+          <div><dt>Indicador da operação</dt><dd>{oficial.ibsCbs.indicadorOperacao ?? "—"}</dd></div>
+          <div><dt>Localidade de incidência</dt><dd>{oficial.ibsCbs.localIncidencia ?? "—"}</dd></div>
+          <div><dt>Base de cálculo</dt><dd>{rs(oficial.ibsCbs.baseCalculo)}</dd></div>
+          <div><dt>Alíquotas</dt><dd>IBS UF {pct(oficial.ibsCbs.aliquotaIbsUf)} · IBS Mun {pct(oficial.ibsCbs.aliquotaIbsMun)} · CBS {pct(oficial.ibsCbs.aliquotaCbs)}</dd></div>
+          <div><dt>IBS</dt><dd>{rs(oficial.ibsCbs.ibs)}</dd></div>
+          <div><dt>CBS</dt><dd>{rs(oficial.ibsCbs.cbs)}</dd></div>
+        </dl>
+      </Cartao> : null}
       <Cartao titulo="Outras informações">
         <dl className="pc-resumo">
           <div><dt>Situação da NFS-e</dt><dd>{oficial?.situacao ? SITUACAO_NFSE[oficial.situacao] ?? oficial.situacao : "—"}</dd></div>

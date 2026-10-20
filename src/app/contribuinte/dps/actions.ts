@@ -3,7 +3,10 @@
 import { redirect } from "next/navigation";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
 import { hojeBrasilia } from "@/lib/contribuinte/formato";
-import { centavosParaTexto, validarMotivoSubstituicao, validarNovoTomador, validarPessoas, validarServico, validarValores, type Erros } from "@/lib/contribuinte/dps";
+import { getConfiguredNFSeEnvironment } from "@/lib/nfse/environments";
+import { ibsCbsObrigatorio } from "@/lib/nfse/ibs-cbs";
+import indicadores from "@/lib/contribuinte/indicadores-operacao.json";
+import { centavosParaTexto, validarIbsCbs, validarMotivoSubstituicao, validarNovoTomador, validarPessoas, validarServico, validarValores, type Erros } from "@/lib/contribuinte/dps";
 import { servicosProntos, tomadorPorId, tomadoresSalvos, type TomadorSalvo } from "@/lib/contribuinte/emissao";
 import { carregarRascunho, excluirRascunho, gravarRascunho, registrarResultado } from "@/lib/contribuinte/rascunhos";
 import { lookupCnpj, type CnpjLookupCustomer } from "@/lib/nfse/cnpj-lookup";
@@ -85,7 +88,9 @@ export async function salvarPessoas(rascunhoId: string | null, _anterior: Estado
   const pessoas = validarPessoas({ competencia: texto(formData, "competencia"), clienteId: tomador?.clienteId ?? "", hoje: hojeBrasilia(), semTomador });
   if (!pessoas.ok) Object.assign(erros, pessoas.erros);
   if (Object.keys(erros).length || !pessoas.ok || (!tomador && !semTomador)) return { erros };
-  const id = await gravarRascunho({ empresaId: empresa.id, usuarioId, id: rascunhoId, passo: 2, dados: { competencia: pessoas.valor.competencia, tomador: tomador ?? undefined, semTomador } });
+  // IBS/CBS: escolha do usuário, mas obrigatório a partir da competência exigida pelo ambiente.
+  const informarIbsCbs = texto(formData, "ibsCbs") === "SIM" || ibsCbsObrigatorio(getConfiguredNFSeEnvironment(), pessoas.valor.competencia);
+  const id = await gravarRascunho({ empresaId: empresa.id, usuarioId, id: rascunhoId, passo: 2, dados: { competencia: pessoas.valor.competencia, tomador: tomador ?? undefined, semTomador, informarIbsCbs, ...(informarIbsCbs ? {} : { ibsCbs: undefined }) } });
   redirect(`/contribuinte/dps/${id}/servico`);
 }
 
@@ -97,10 +102,14 @@ export async function salvarServico(rascunhoId: string, _anterior: EstadoPasso, 
   const servicos = await servicosProntos(contexto.empresa.id);
   if (!servicos.some((item) => item.id === servico.valor.modeloId)) return { erros: { servico: "Serviço indisponível para emissão" } };
   const rascunho = await carregarRascunho(contexto.empresa.id, rascunhoId);
+  const ibsCbs = rascunho?.dados.informarIbsCbs
+    ? validarIbsCbs({ cst: texto(formData, "cst"), classificacao: texto(formData, "classificacao"), indicadorOperacao: texto(formData, "indicadorOperacao"), consumoPessoal: texto(formData, "consumoPessoal") }, indicadores.map((item) => item.codigo))
+    : null;
+  if (ibsCbs && !ibsCbs.ok) return { erros: ibsCbs.erros };
   // Trocar de serviço pode mudar a alíquota: os valores precisam ser confirmados de novo.
   const substituicao = rascunho?.dados.substituicao;
   const valores = rascunho?.dados.servico?.modeloId === servico.valor.modeloId ? rascunho.dados.valores : substituicao ? { valorCentavos: substituicao.valorCentavos } : undefined;
-  await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: rascunhoId, passo: 3, dados: { servico: servico.valor, valores } });
+  await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: rascunhoId, passo: 3, dados: { servico: servico.valor, valores, ...(ibsCbs?.ok ? { ibsCbs: ibsCbs.valor } : {}) } });
   redirect(`/contribuinte/dps/${rascunhoId}/valores`);
 }
 

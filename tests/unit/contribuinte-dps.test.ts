@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { validarIbsCbs } from "@/lib/contribuinte/dps";
+import { ibsCbsObrigatorio } from "@/lib/nfse/ibs-cbs";
 import { aliquotaEmPontosBase, centavosParaTexto, mascaraValor, passoLiberado, passoPorSlug, previaValores, validarNovoTomador, validarPessoas, validarServico, validarValores, valorEmCentavos } from "@/lib/contribuinte/dps";
 
 describe("valores em reais", () => {
@@ -68,5 +70,25 @@ describe("fluxo", () => {
     expect(previaValores({ valorCentavos: 10000, aliquotaBp: 200, retido: false })).toEqual({ base: 10000, issqn: 200, retido: 0, liquido: 10000 });
     expect(previaValores({ valorCentavos: 10000, aliquotaBp: 500, retido: true })).toEqual({ base: 10000, issqn: 500, retido: 500, liquido: 9500 });
     expect(previaValores({ valorCentavos: 10000, retido: true }).issqn).toBeNull();
+  });
+});
+
+describe("IBS/CBS no rascunho", () => {
+  it("obrigatório desde 10/2026 na restrita e 01/2027 em produção", () => {
+    expect(ibsCbsObrigatorio("PRODUCTION_RESTRICTED", "2026-10-01")).toBe(true);
+    expect(ibsCbsObrigatorio("PRODUCTION_RESTRICTED", "2026-09-30")).toBe(false);
+    expect(ibsCbsObrigatorio("PRODUCTION", "2026-12-31")).toBe(false);
+    expect(ibsCbsObrigatorio("PRODUCTION", "2027-01-01")).toBe(true);
+  });
+  it("valida CST, classificação e indicador da tabela oficial", () => {
+    expect(validarIbsCbs({ cst: "000", classificacao: "000.001", indicadorOperacao: "100301", consumoPessoal: "0" }, ["100301"])).toEqual({ ok: true, valor: { cst: "000", classificacao: "000001", indicadorOperacao: "100301", consumoPessoal: "0" } });
+    const ruim = validarIbsCbs({ cst: "0", classificacao: "1", indicadorOperacao: "999999", consumoPessoal: "x" }, ["100301"]);
+    expect(ruim.ok).toBe(false);
+    if (!ruim.ok) expect(Object.keys(ruim.erros).sort()).toEqual(["classificacao", "cst", "indicadorOperacao"]);
+  });
+  it("com IBS/CBS marcado, o passo 3 só libera depois de informar a classificação", () => {
+    const base = { competencia: "2026-10-20", semTomador: true, informarIbsCbs: true, servico: { modeloId: "s", descricao: "abc" } };
+    expect(passoLiberado(base)).toBe(2);
+    expect(passoLiberado({ ...base, ibsCbs: { cst: "000", classificacao: "000001", indicadorOperacao: "100301", consumoPessoal: "0" } })).toBe(3);
   });
 });

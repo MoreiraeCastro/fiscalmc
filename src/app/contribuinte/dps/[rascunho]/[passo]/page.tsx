@@ -9,6 +9,9 @@ import { BotaoEmitir } from "@/components/contribuinte/botao-emitir";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
 import { centavosParaTexto, MOTIVOS_SUBSTITUICAO, passoLiberado, passoPorSlug, previaValores, type DadosRascunho } from "@/lib/contribuinte/dps";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getConfiguredNFSeEnvironment } from "@/lib/nfse/environments";
+import { CST_IBS_CBS, IBS_CBS_OBRIGATORIO_DESDE, IBS_CBS_PADRAO } from "@/lib/nfse/ibs-cbs";
+import indicadores from "@/lib/contribuinte/indicadores-operacao.json";
 import { relationOne } from "@/lib/presentation/relations";
 import { ambienteEmissao, dadosEmitente, previaTributacao, servicosProntos, tomadoresSalvos, tomadorPorId, type Previa } from "@/lib/contribuinte/emissao";
 import { formatarData, formatarDocumento, formatarValor, hojeBrasilia } from "@/lib/contribuinte/formato";
@@ -58,13 +61,15 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
   if (passo.slug === "pessoas") {
     const [emitente, tomadores] = await Promise.all([dadosEmitente(empresa.id), tomadoresSalvos(empresa.id)]);
     return <>{cabecalho}<FormPessoas rascunhoId={rascunhoId} hoje={hojeBrasilia()} tomadores={tomadores}
-      inicial={{ competencia: dados.competencia ?? hojeBrasilia(), tomador: dados.tomador ?? null, semTomador: Boolean(dados.semTomador) }}
+      inicial={{ competencia: dados.competencia ?? hojeBrasilia(), tomador: dados.tomador ?? null, semTomador: Boolean(dados.semTomador), informarIbsCbs: Boolean(dados.informarIbsCbs) }}
+      ibsCbsObrigatorioDesde={IBS_CBS_OBRIGATORIO_DESDE[getConfiguredNFSeEnvironment()]}
       emitente={{ ...emitente, municipio: nomeMunicipio(emitente.municipio) }} /></>;
   }
 
   const servicos = await servicosProntos(empresa.id);
   if (passo.slug === "servico") {
     return <>{cabecalho}<FormServico rascunhoId={rascunhoId!} escritorio={escritorio} empresaId={empresa.id}
+      ibsCbs={dados.informarIbsCbs ? dados.ibsCbs ?? { cst: IBS_CBS_PADRAO.cst, classificacao: IBS_CBS_PADRAO.classification, indicadorOperacao: IBS_CBS_PADRAO.operationIndicator, consumoPessoal: IBS_CBS_PADRAO.finalConsumer } : null}
       inicial={{ modeloId: dados.servico?.modeloId ?? "", descricao: dados.servico?.descricao ?? "" }}
       servicos={servicos.map((item) => ({ id: item.id, nome: item.nome, codigo: item.codigo, descricaoCodigo: item.descricaoCodigo, nbs: item.nbs, descricaoPadrao: item.descricaoPadrao, municipioPrestacao: nomeMunicipio(item.municipioPrestacao ?? empresa.municipio) }))} /></>;
   }
@@ -122,6 +127,15 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
         <div><dt>Descrição do serviço</dt><dd className="pre">{dados.servico?.descricao}</dd></div>
       </dl>
     </Cartao>
+    {dados.informarIbsCbs && dados.ibsCbs ? <Cartao titulo="IBS/CBS" acoes={editar("servico")}>
+      <dl className="pc-resumo">
+        <div><dt>Situação tributária</dt><dd>{dados.ibsCbs.cst} - {CST_IBS_CBS[dados.ibsCbs.cst] ?? ""}</dd></div>
+        <div><dt>Classificação tributária</dt><dd>{dados.ibsCbs.classificacao}</dd></div>
+        <div><dt>Indicador da operação</dt><dd>{dados.ibsCbs.indicadorOperacao} - {indicadores.find((i) => i.codigo === dados.ibsCbs!.indicadorOperacao)?.local ?? ""}</dd></div>
+        <div><dt>Uso ou consumo pessoal</dt><dd>{dados.ibsCbs.consumoPessoal === "1" ? "Sim" : "Não"}</dd></div>
+        <div><dt>Valores</dt><dd>Calculados pela Receita na emissão (aparecem no Visualizar).</dd></div>
+      </dl>
+    </Cartao> : null}
     <Cartao titulo="Valores" acoes={editar("valores")}>
       <dl className="pc-resumo">
         <div><dt>Valor do serviço</dt><dd>R$ {formatarValor(valores.valorCentavos)}</dd></div>
@@ -157,6 +171,7 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
         pedido={{
           ...(escritorio ? { organizationId: empresa.id } : {}),
           serviceTemplateId: servico.id, ...(tomador && !dados.semTomador ? { customerId: tomador.id } : {}), amount: (valores.valorCentavos / 100).toFixed(2), serviceDate: dados.competencia!, description: dados.servico!.descricao,
+          ...(dados.informarIbsCbs && dados.ibsCbs ? { ibsCbs: { finalConsumer: dados.ibsCbs.consumoPessoal, operationIndicator: dados.ibsCbs.indicadorOperacao, destinationIndicator: "0" as const, cst: dados.ibsCbs.cst, classification: dados.ibsCbs.classificacao } } : {}),
           ...(subst?.motivoCodigo ? { substitution: { invoiceId: subst.notaId, reasonCode: subst.motivoCodigo, ...(subst.motivo ? { reason: subst.motivo } : {}) } } : {}),
           ...(exigeAliquota && valores.aliquotaManualBp !== undefined && valores.fonteAliquota ? { manualIssRateBasisPoints: valores.aliquotaManualBp, manualIssRateSourceNote: valores.fonteAliquota } : {}),
         }} />

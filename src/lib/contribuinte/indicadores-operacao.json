@@ -1,0 +1,132 @@
+[
+ {
+  "codigo": "020101",
+  "operacao": "Execução de operações com bem imóvel, bem imaterial, inclusive direito, relacionado a bem imóvel",
+  "local": "Localidade do imóvel"
+ },
+ {
+  "codigo": "020201",
+  "operacao": "Execução de serviços sobre bem imóvel",
+  "local": "Localidade do imóvel"
+ },
+ {
+  "codigo": "020301",
+  "operacao": "Execução dos serviços de administração e intermediação de bens imóveis",
+  "local": "Localidade do imóvel"
+ },
+ {
+  "codigo": "030101",
+  "operacao": "Execução de serviços diversos exclusivamente prestados fisicamente sobre a pessoa ou integralmente fruídos presencialmente por pessoa física",
+  "local": "Estabelecimento do fornecedor"
+ },
+ {
+  "codigo": "030102",
+  "operacao": "Execução de serviços diversos exclusivamente prestados fisicamente sobre a pessoa ou integralmente fruídos presencialmente por pessoa física",
+  "local": "Endereço do adquirente"
+ },
+ {
+  "codigo": "030103",
+  "operacao": "Execução de serviços diversos exclusivamente prestados fisicamente sobre a pessoa ou integralmente fruídos presencialmente por pessoa física",
+  "local": "Endereço do destinatário"
+ },
+ {
+  "codigo": "030104",
+  "operacao": "Execução de serviços diversos exclusivamente prestados fisicamente sobre a pessoa ou integralmente fruídos presencialmente por pessoa física",
+  "local": "Endereço diverso do fornecedor, adquirente ou destinatário"
+ },
+ {
+  "codigo": "040101",
+  "operacao": "Execução de serviços de planejamento, organização e administração de feiras, exposições, congressos, espetáculos, exibições e congêneres",
+  "local": "Local do Evento"
+ },
+ {
+  "codigo": "050101",
+  "operacao": "Execução de serviços diversos fisicamente prestados sobre bem móvel material",
+  "local": "Estabelecimento do fornecedor"
+ },
+ {
+  "codigo": "050102",
+  "operacao": "Execução de serviços diversos fisicamente prestados sobre bem móvel material",
+  "local": "Endereço do adquirente"
+ },
+ {
+  "codigo": "050103",
+  "operacao": "Execução de serviços diversos fisicamente prestados sobre bem móvel material",
+  "local": "Endereço do destinatário"
+ },
+ {
+  "codigo": "050104",
+  "operacao": "Execução de serviços diversos fisicamente prestados sobre bem móvel material",
+  "local": "Endereço diverso do fornecedor, adquirente ou destinatário"
+ },
+ {
+  "codigo": "050201",
+  "operacao": "Execução de serviços portuários",
+  "local": "Local da prestação"
+ },
+ {
+  "codigo": "060101",
+  "operacao": "Execução de serviços de transporte de passageiros",
+  "local": "Local de início do transporte"
+ },
+ {
+  "codigo": "070101",
+  "operacao": "Execução de serviços de transporte de carga",
+  "local": "Endereço fornecido para entrega"
+ },
+ {
+  "codigo": "070102",
+  "operacao": "Execução de serviços de transporte de carga",
+  "local": "Local da retirada"
+ },
+ {
+  "codigo": "080101",
+  "operacao": "Execução de serviços de exploração de via",
+  "local": "Local da prestação, correspondente à extensão da via explorada e proporcional ao território dos entes tributantes"
+ },
+ {
+  "codigo": "100101",
+  "operacao": "Execução de operações de cessão de espaço para prestação de serviços publicitários",
+  "local": "Local do domicílio principal do adquirente"
+ },
+ {
+  "codigo": "100102",
+  "operacao": "Execução de operações de cessão de espaço para prestação de serviços publicitários",
+  "local": "Local do domicílio do destinatário, nos casos de adquirente residente ou domiciliado no exterior (5)"
+ },
+ {
+  "codigo": "100201",
+  "operacao": "Execução de operações de cessão de espaço para prestação de serviços publicitários",
+  "local": "Local do domicílio principal do destinatário"
+ },
+ {
+  "codigo": "100301",
+  "operacao": "Execução dos demais serviços em operações não especificadas anteriormente ou,nos serviços de que trata o inc. III, estes sejam,ainda que parcialmente, prestados à distância",
+  "local": "Local do domicílio principal do adquirente"
+ },
+ {
+  "codigo": "100302",
+  "operacao": "Execução dos demais serviços em operações não especificadas anteriormente ou,nos serviços de que trata o inc. III, estes sejam,ainda que parcialmente, prestados à distância",
+  "local": "Local do domicílio do destinatário, nos casos de adquirente residente ou domiciliado no exterior (5)"
+ },
+ {
+  "codigo": "100401",
+  "operacao": "Execução dos demais serviços em operações não especificadas anteriormente ou, nos serviços de que tratam o inc. III, estes sejam, ainda que parcialmente, prestados à distância",
+  "local": "Local do domicílio principal do destinatário"
+ },
+ {
+  "codigo": "100501",
+  "operacao": "Execução de demais operações não especificadas anteriormente com bens móveis imateriais, inclusive direitos",
+  "local": "Local do domicílio principal do adquirente"
+ },
+ {
+  "codigo": "100502",
+  "operacao": "Execução de demais operações não especificadas anteriormente com bens móveis imateriais, inclusive direitos",
+  "local": "Local do domicílio do destinatário, nos casos de adquirente residente ou domiciliado no exterior (5)"
+ },
+ {
+  "codigo": "100601",
+  "operacao": "Execução de demais operações não especificadas anteriormente com bens móveis imateriais, inclusive direitos",
+  "local": "Local do domicílio principal do destinatário"
+ }
+]

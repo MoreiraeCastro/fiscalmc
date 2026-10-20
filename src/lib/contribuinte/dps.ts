@@ -21,7 +21,9 @@ export type ServicoRascunho = { modeloId: string; descricao: string };
 export type ValoresRascunho = { valorCentavos: number; aliquotaManualBp?: number; fonteAliquota?: string };
 /** Substituição: a nota original (travada) e o motivo exigido pelo grupo subst da DPS. */
 export type SubstituicaoRascunho = { notaId: string; chave: string; numero: string | null; competencia: string; valorCentavos: number; motivoCodigo?: MotivoSubstituicao; motivo?: string };
-export type DadosRascunho = { competencia?: string; tomador?: TomadorRascunho; /** Tomador/Adquirente não informado. */ semTomador?: boolean; servico?: ServicoRascunho; valores?: ValoresRascunho; substituicao?: SubstituicaoRascunho };
+/** IBS/CBS do passo Serviço (CST, cClassTrib, cIndOp e indFinal); indDest é sempre 0 (destinatário = adquirente). */
+export type IbsCbsRascunho = { cst: string; classificacao: string; indicadorOperacao: string; consumoPessoal: "0" | "1" };
+export type DadosRascunho = { competencia?: string; tomador?: TomadorRascunho; /** Tomador/Adquirente não informado. */ semTomador?: boolean; informarIbsCbs?: boolean; ibsCbs?: IbsCbsRascunho; servico?: ServicoRascunho; valores?: ValoresRascunho; substituicao?: SubstituicaoRascunho };
 
 export const MOTIVOS_SUBSTITUICAO = {
   "01": "Desenquadramento de NFS-e do Simples Nacional",
@@ -146,9 +148,21 @@ export function validarValores(entrada: { valor: string; aliquota: string; fonte
 /** Até onde o rascunho permite ir: cada passo exige os anteriores completos. */
 export function passoLiberado(dados: DadosRascunho): NumeroPasso {
   if (!dados.competencia || (!dados.tomador && !dados.semTomador)) return 1;
-  if (!dados.servico) return 2;
+  if (!dados.servico || (dados.informarIbsCbs && !dados.ibsCbs)) return 2;
   if (!dados.valores || (dados.substituicao && !dados.substituicao.motivoCodigo)) return 3;
   return 4;
+}
+
+/** IBS/CBS (passo Serviço): CST de 3 dígitos, classificação de 6 e um indicador da operação da tabela oficial. */
+export function validarIbsCbs(entrada: { cst: string; classificacao: string; indicadorOperacao: string; consumoPessoal: string }, indicadoresValidos: string[]): Validacao<IbsCbsRascunho> {
+  const erros: Erros = {};
+  const cst = entrada.cst.trim();
+  const classificacao = entrada.classificacao.replace(/[^0-9]/g, "");
+  if (!cst) erros.cst = OBRIGATORIO; else if (!/^[0-9]{3}$/.test(cst)) erros.cst = "CST inválido";
+  if (!classificacao) erros.classificacao = OBRIGATORIO; else if (classificacao.length !== 6) erros.classificacao = "Informe os 6 dígitos";
+  if (!entrada.indicadorOperacao) erros.indicadorOperacao = OBRIGATORIO; else if (!indicadoresValidos.includes(entrada.indicadorOperacao)) erros.indicadorOperacao = "Indicador inválido";
+  const consumoPessoal = entrada.consumoPessoal === "1" ? "1" : "0";
+  return Object.keys(erros).length ? { ok: false, erros } : { ok: true, valor: { cst, classificacao, indicadorOperacao: entrada.indicadorOperacao, consumoPessoal } };
 }
 
 /** Motivo da substituição (passo Valores): código obrigatório; descrição obrigatória só em "99 - Outros". */

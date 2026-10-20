@@ -51,6 +51,8 @@ export type NfseOficial = {
   tributacao: { tributacaoIssqn: string | null; retencao: string | null; aliquotaInformada: string | null };
   valores: { servico: number | null; baseCalculo: number | null; aliquotaAplicada: string | null; issqn: number | null; totalRetido: number | null; liquido: number | null };
   substituida: string | null;
+  /** IBS/CBS calculado pela SEFIN (grupo IBSCBS da NFS-e) + classificação informada na DPS. */
+  ibsCbs: { localIncidencia: string | null; baseCalculo: number | null; aliquotaIbsUf: string | null; aliquotaIbsMun: string | null; aliquotaCbs: string | null; ibs: number | null; cbs: number | null; cst: string | null; classificacao: string | null; indicadorOperacao: string | null } | null;
 };
 
 function endereco(no: unknown): EnderecoOficial | null {
@@ -98,6 +100,20 @@ export function lerNfseOficial(xml: string): NfseOficial | null {
       issqn: centavos(texto(inf, "valores", "vISSQN")), totalRetido: centavos(texto(inf, "valores", "vTotalRet")), liquido: centavos(texto(inf, "valores", "vLiq")),
     },
     substituida: texto(dps, "subst", "chSubstda"),
+    ibsCbs: ibsCbsOficial(filho(inf, "IBSCBS"), filho(dps, "IBSCBS")),
+  };
+}
+
+function ibsCbsOficial(nota: unknown, declarado: unknown): NfseOficial["ibsCbs"] {
+  if (!nota && !declarado) return null;
+  // Na DPS: CST/cClassTrib direto em trib (leiaute RTC da restrita) ou dentro de gIBSCBS (leiaute publicado).
+  const trib = filho(declarado, "valores", "trib");
+  const sit = filho(trib, "gIBSCBS") ?? trib;
+  return {
+    localIncidencia: texto(nota, "xLocalidadeIncid"), baseCalculo: centavos(texto(nota, "valores", "vBC")),
+    aliquotaIbsUf: texto(nota, "valores", "uf", "pIBSUF"), aliquotaIbsMun: texto(nota, "valores", "mun", "pIBSMun"), aliquotaCbs: texto(nota, "valores", "fed", "pCBS"),
+    ibs: centavos(texto(nota, "totCIBS", "gIBS", "vIBSTot")), cbs: centavos(texto(nota, "totCIBS", "gCBS", "vCBS")),
+    cst: texto(sit, "CST"), classificacao: texto(sit, "cClassTrib"), indicadorOperacao: texto(declarado, "cIndOp"),
   };
 }
 

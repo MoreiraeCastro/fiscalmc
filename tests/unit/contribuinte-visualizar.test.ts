@@ -36,6 +36,15 @@ describe("XML oficial da NFS-e", () => {
   });
 });
 
+describe("XML oficial com IBS/CBS (NFS-e de teste da Produção Restrita, gerada pelo Emissor Nacional)", () => {
+  it("lê o grupo IBSCBS calculado pela SEFIN e a classificação declarada", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const nota = lerNfseOficial(await readFile(new URL("../../fixtures/nfse/restrita-emissor-nacional-ibscbs.xml", import.meta.url), "utf8"))!;
+    expect(nota.ibsCbs).toEqual({ localIncidencia: "Brasília", baseCalculo: 10000, aliquotaIbsUf: "0.10", aliquotaIbsMun: "0.00", aliquotaCbs: "0.90", ibs: 10, cbs: 90, cst: "000", classificacao: "000001", indicadorOperacao: "100301" });
+    expect(nota.valores.liquido).toBe(10000);
+  });
+});
+
 describe("motivos", () => {
   it("cancelamento: código 1/2/9 e descrição de 15 a 255", () => {
     expect(validarCancelamento({ codigo: "1", motivo: "  Valor   errado na emissão " })).toEqual({ ok: true, valor: { codigo: "1", motivo: "Valor errado na emissão" } });

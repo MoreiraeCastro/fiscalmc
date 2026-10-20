@@ -11,7 +11,7 @@ import { Campo, FaixaValidacao, Leitura, Rodape } from "./campos";
 
 export type EmitenteResumo = { razaoSocial: string; cnpj: string; municipio: string; inscricaoMunicipal: string | null; opcaoSimples: string; apuracaoSimples: string | null; email: string | null; telefone: string | null; endereco: string };
 
-type Inicial = { competencia: string; tomador: { clienteId: string; documento: string | null; nome: string } | null; semTomador: boolean };
+type Inicial = { competencia: string; tomador: { clienteId: string; documento: string | null; nome: string } | null; semTomador: boolean; informarIbsCbs: boolean };
 
 /** Máscara de CPF (até 11 dígitos) ou CNPJ enquanto digita. */
 function mascaraDocumento(texto: string) {
@@ -20,9 +20,13 @@ function mascaraDocumento(texto: string) {
   return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})$/, "$1.$2.$3/$4-$5");
 }
 
-export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje }: { rascunhoId: string | null; inicial: Inicial; emitente: EmitenteResumo; tomadores: TomadorSalvo[]; hoje: string }) {
+export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje, ibsCbsObrigatorioDesde }: { rascunhoId: string | null; inicial: Inicial; emitente: EmitenteResumo; tomadores: TomadorSalvo[]; hoje: string; ibsCbsObrigatorioDesde: string }) {
   const [estado, enviar, salvando] = useActionState<EstadoPasso, FormData>(salvarPessoas.bind(null, rascunhoId), { erros: {} });
   const [competencia, setCompetencia] = useState(inicial.competencia);
+  const [informarIbsCbs, setInformarIbsCbs] = useState(inicial.informarIbsCbs);
+  // Mesma regra do servidor (ibsCbsObrigatorio): a partir desta competência não dá para emitir sem IBS/CBS.
+  const ibsCbsObrigatorio = Boolean(competencia) && competencia >= ibsCbsObrigatorioDesde;
+  const ibsCbsPermitido = Boolean(competencia) && competencia >= "2025-12-01";
   const [detalhes, setDetalhes] = useState(false);
   // Tomador escolhido (já salvo) ou digitado (novo).
   const [clienteId, setClienteId] = useState(inicial.tomador?.clienteId ?? "");
@@ -69,9 +73,15 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje }: 
         <Campo rotulo="Data de Competência" obrigatorio erro={erros.competencia} id="competencia" largura="terco">
           <input id="competencia" name="competencia" type="date" max={hoje} value={competencia} onChange={(e) => setCompetencia(e.target.value)} />
         </Campo>
-        <Leitura rotulo="Preencher as informações IBS/CBS?" valor="Não" largura="terco" />
+        <fieldset className="pc-opcoes pc-campo terco">
+          <legend>Preencher as informações IBS/CBS?<span className="pc-obrigatorio"> *</span></legend>
+          <label><input type="radio" name="ibsCbs" value="SIM" checked={informarIbsCbs || ibsCbsObrigatorio} disabled={!ibsCbsPermitido} onChange={() => setInformarIbsCbs(true)} /> Sim</label>
+          <label className={ibsCbsObrigatorio ? "desativado" : undefined}><input type="radio" name="ibsCbs" value="NAO" checked={!informarIbsCbs && !ibsCbsObrigatorio} disabled={ibsCbsObrigatorio} onChange={() => setInformarIbsCbs(false)} /> Não</label>
+        </fieldset>
       </div>
-      {competencia ? <div className="pc-aviso">O IBS/CBS (reforma tributária) é <strong>opcional</strong> para competências a partir de 01/12/2025 e será <strong>obrigatório</strong> a partir de 01/01/2027. O nosso emissor ainda não envia IBS/CBS; isso entra antes de 2027.</div> : null}
+      {competencia ? <div className="pc-aviso">{ibsCbsObrigatorio
+        ? <>Para esta competência as informações de <strong>IBS/CBS</strong> (reforma tributária) são <strong>obrigatórias</strong>: você vai informá-las no passo Serviço.</>
+        : <>O IBS/CBS (reforma tributária) é <strong>permitido</strong> para competências a partir de 01/12/2025 e <strong>obrigatório</strong> a partir de {ibsCbsObrigatorioDesde.split("-").reverse().join("/")}.</>}</div> : null}
     </Cartao>
 
     <Cartao titulo="Emitente da NFS-e">

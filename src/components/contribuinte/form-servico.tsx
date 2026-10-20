@@ -3,17 +3,22 @@
 import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import { salvarServico, type EstadoPasso } from "@/app/contribuinte/dps/actions";
-import { DESCRICAO_MAX } from "@/lib/contribuinte/dps";
+import { DESCRICAO_MAX, type IbsCbsRascunho } from "@/lib/contribuinte/dps";
+import { CST_IBS_CBS } from "@/lib/nfse/ibs-cbs";
+import indicadores from "@/lib/contribuinte/indicadores-operacao.json";
 import { Cartao } from "./portal-shell";
 import { Campo, FaixaValidacao, Leitura, Rodape } from "./campos";
 
 export type ServicoOpcao = { id: string; nome: string; codigo: string | null; descricaoCodigo: string | null; nbs: string | null; municipioPrestacao: string; descricaoPadrao: string | null };
 
-export function FormServico({ rascunhoId, servicos, inicial, escritorio, empresaId }: { rascunhoId: string; servicos: ServicoOpcao[]; inicial: { modeloId: string; descricao: string }; escritorio: boolean; empresaId: string }) {
+export function FormServico({ rascunhoId, servicos, inicial, escritorio, empresaId, ibsCbs }: { rascunhoId: string; servicos: ServicoOpcao[]; inicial: { modeloId: string; descricao: string }; escritorio: boolean; empresaId: string; ibsCbs: IbsCbsRascunho | null }) {
   const [estado, enviar, salvando] = useActionState<EstadoPasso, FormData>(salvarServico.bind(null, rascunhoId), { erros: {} });
   const [modeloId, setModeloId] = useState(inicial.modeloId || (servicos.length === 1 ? servicos[0].id : ""));
   const [descricao, setDescricao] = useState(inicial.descricao || (servicos.length === 1 ? servicos[0].descricaoPadrao ?? "" : ""));
   const [busca, setBusca] = useState("");
+  const [tributo, setTributo] = useState<IbsCbsRascunho | null>(ibsCbs);
+  const mudar = (campo: keyof IbsCbsRascunho, valor: string) => setTributo((atual) => (atual ? { ...atual, [campo]: valor } : atual));
+  const indicador = indicadores.find((item) => item.codigo === tributo?.indicadorOperacao);
   const servico = servicos.find((item) => item.id === modeloId);
   const visiveis = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase("pt-BR");
@@ -63,6 +68,32 @@ export function FormServico({ rascunhoId, servicos, inicial, escritorio, empresa
         <small className="pc-contador">Total de caracteres: {descricao.length} / {DESCRICAO_MAX}</small>
       </Campo>
     </Cartao>
+    {tributo ? <Cartao titulo="IBS/CBS">
+      <div className="pc-grade">
+        <Campo rotulo="Código de Situação Tributária" obrigatorio erro={erros.cst} id="cst" largura="meia">
+          <select id="cst" name="cst" className="pc-input" value={tributo.cst} onChange={(e) => mudar("cst", e.target.value)}>
+            {Object.entries(CST_IBS_CBS).map(([codigo, rotulo]) => <option key={codigo} value={codigo}>{codigo} - {rotulo}</option>)}
+          </select>
+        </Campo>
+        <Campo rotulo="Código de Classificação Tributária" obrigatorio erro={erros.classificacao} dica="6 dígitos. 000001 = situações tributadas integralmente pelo IBS e CBS." id="classificacao" largura="meia">
+          <input id="classificacao" name="classificacao" inputMode="numeric" maxLength={6} value={tributo.classificacao} onChange={(e) => mudar("classificacao", e.target.value.replace(/[^0-9]/g, ""))} />
+        </Campo>
+        <Campo rotulo="Código indicador da operação" obrigatorio erro={erros.indicadorOperacao} id="indicadorOperacao" largura="inteira">
+          <select id="indicadorOperacao" name="indicadorOperacao" className="pc-input" value={tributo.indicadorOperacao} onChange={(e) => mudar("indicadorOperacao", e.target.value)}>
+            <option value="">Selecione</option>
+            {indicadores.map((item) => <option key={item.codigo} value={item.codigo}>{item.codigo} - {item.operacao} ({item.local})</option>)}
+          </select>
+        </Campo>
+        {indicador ? <p className="pc-nota pc-campo inteira">Local de incidência: {indicador.local}.</p> : null}
+        <fieldset className="pc-opcoes pc-campo meia">
+          <legend>Operação de uso ou consumo pessoal?</legend>
+          <label><input type="radio" name="consumoPessoal" value="0" checked={tributo.consumoPessoal === "0"} onChange={() => mudar("consumoPessoal", "0")} /> Não</label>
+          <label><input type="radio" name="consumoPessoal" value="1" checked={tributo.consumoPessoal === "1"} onChange={() => mudar("consumoPessoal", "1")} /> Sim</label>
+        </fieldset>
+        <Leitura rotulo="O destinatário é o próprio adquirente?" valor="Sim" largura="meia" />
+      </div>
+      <p className="pc-nota">Base de cálculo, alíquotas e valores de IBS e CBS são calculados pela Receita na emissão.</p>
+    </Cartao> : null}
     <Rodape voltar={`/contribuinte/dps/${rascunhoId}/pessoas`}><button className="pc-botao" type="submit" disabled={salvando}>{salvando ? "Salvando…" : "Avançar"}</button></Rodape>
   </form>;
 }

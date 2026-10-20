@@ -17,6 +17,7 @@ export type PedidoEmissao = {
   manualIssRateBasisPoints?: number;
   manualIssRateSourceNote?: string;
   substitution?: { invoiceId: string; reasonCode: string; reason?: string };
+  ibsCbs?: { finalConsumer: string; operationIndicator: string; destinationIndicator: "0"; cst: string; classification: string };
 };
 
 /**

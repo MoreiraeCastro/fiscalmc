@@ -29,6 +29,7 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
   let officeSession;
   try { officeSession = await requireOfficeSession(); } catch { redirect("/app?notice=office"); }
   const [{ id }, { tab: requested, service: selectedServiceId }] = await Promise.all([params, searchParams]);
+  if (requested === "issue") redirect(`/contribuinte/usar/${id}?voltar=${encodeURIComponent("/contribuinte/nova")}`);
   const tab: CompanyTab = tabs.some(([key]) => key === requested) ? requested as CompanyTab : "overview";
   const isOverview = tab === "overview";
   const needsServices = isOverview || tab === "services" || tab === "issue";

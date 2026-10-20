@@ -203,3 +203,45 @@ a.pc-empresa:hover { background: var(--surface-2); }
   .pc-passos li > * { flex-direction: column; gap: 4px; padding: 9px 4px; font-size: 11.5px; }
   .pc-resumo div { grid-template-columns: 1fr; gap: 2px; }
 }
+
+/* ---- Visualizar, Cancelar e Substituir ---- */
+.pc-barra-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pc-espaco { flex: 1; }
+.pc-barra-acoes form { display: contents; }
+.pc-botao.perigo { background: #fff; color: var(--red); border-color: #efb4b4; }
+.pc-botao.perigo:hover:not(:disabled) { background: var(--red-soft); }
+.pc-botao.perigo.cheio { background: var(--red); color: #fff; border-color: var(--red); }
+.pc-botao.perigo.cheio:hover:not(:disabled) { background: #a92f2f; }
+.pc-largo { flex-basis: 100%; }
+select.pc-input { appearance: auto; }
+.pc-grade-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.pc-abas { display: flex; gap: 4px; border-bottom: 2px solid var(--border); }
+.pc-abas a { padding: 9px 16px; margin-bottom: -2px; border-bottom: 3px solid transparent; font-size: 14px; font-weight: 650; color: var(--muted); }
+.pc-abas a:hover { color: var(--navy); }
+.pc-abas a.ativa { color: var(--navy); border-bottom-color: var(--orange); }
+.pc-eventos { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pc-eventos li { display: grid; gap: 3px; padding: 10px 12px; border-left: 3px solid var(--navy-3); background: #f7f9fb; border-radius: 0 8px 8px 0; font-size: 13.5px; }
+.pc-eventos .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+.pc-mudou { color: var(--red); font-weight: 650; }
+.pc-comparacao td { vertical-align: top; }
+.pc-comparacao td.pre { white-space: pre-wrap; }
+.pc-subst { border-color: #f0c36a; background: #fffdf6; }
+.pc-janela-form { grid-template-rows: auto 1fr; overflow-y: auto; }
+.pc-nota.sucesso { color: var(--emerald-dark); }
+.pc-nota.erro { color: var(--red); }
+.pc-aviso .pc-acoes { margin-top: 8px; }
+@media (max-width: 900px) { .pc-grade-2 { grid-template-columns: 1fr; } }
+@media print {
+  .pc-topo, .pc-rodape, .pc-nao-imprime, .pc-trilha { display: none !important; }
+  .pc { background: #fff; }
+  .pc-cartao { break-inside: avoid; border-color: #ccc; }
+}
+
+/* ---- Aba Escritório (área do escritório dentro do portal) ---- */
+.pc-subnav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 8px 12px; background: var(--navy); border-radius: 10px; }
+.pc-subnav strong { color: #fff; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; margin-right: 8px; }
+.pc-subnav a { padding: 6px 10px; border-radius: 7px; color: #dce8f5; font-size: 13.5px; font-weight: 600; }
+.pc-subnav a:hover { background: rgba(255,255,255,.1); }
+.pc-subnav a.ativo { background: var(--emerald); color: #fff; }
+.pc-escritorio { background: #fff; border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
+.pc-escritorio > .page { width: auto; margin: 0; padding: 20px 22px 32px; }

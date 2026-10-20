@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
 import { hojeBrasilia } from "@/lib/contribuinte/formato";
-import { validarNovoTomador, validarPessoas, validarServico, validarValores, type Erros } from "@/lib/contribuinte/dps";
+import { centavosParaTexto, validarMotivoSubstituicao, validarNovoTomador, validarPessoas, validarServico, validarValores, type Erros } from "@/lib/contribuinte/dps";
 import { servicosProntos, tomadorPorId, tomadoresSalvos, type TomadorSalvo } from "@/lib/contribuinte/emissao";
 import { carregarRascunho, excluirRascunho, gravarRascunho, registrarResultado } from "@/lib/contribuinte/rascunhos";
 import { lookupCnpj, type CnpjLookupCustomer } from "@/lib/nfse/cnpj-lookup";
@@ -42,7 +42,8 @@ export async function salvarPessoas(rascunhoId: string | null, _anterior: Estado
   const contexto = await empresaQueEmite();
   if (!contexto) return SEM_PERMISSAO;
   const { empresa, usuarioId } = contexto;
-  let clienteId = texto(formData, "clienteId");
+  const semTomador = texto(formData, "onde") === "NAO_INFORMADO";
+  let clienteId = semTomador ? "" : texto(formData, "clienteId");
   const documento = texto(formData, "documento");
   const erros: Erros = {};
   let tomador: { clienteId: string; documento: string | null; nome: string } | null = null;
@@ -52,7 +53,7 @@ export async function salvarPessoas(rascunhoId: string | null, _anterior: Estado
     if (salvo) tomador = { clienteId: salvo.id, documento: salvo.tax_id, nome: salvo.legal_name };
     else clienteId = "";
   }
-  if (!tomador && documento.trim()) {
+  if (!semTomador && !tomador && documento.trim()) {
     const novo = validarNovoTomador({ documento, nome: texto(formData, "nome"), email: texto(formData, "email") });
     if (!novo.ok) Object.assign(erros, novo.erros);
     else {
@@ -77,10 +78,10 @@ export async function salvarPessoas(rascunhoId: string | null, _anterior: Estado
       }
     }
   }
-  const pessoas = validarPessoas({ competencia: texto(formData, "competencia"), clienteId: tomador?.clienteId ?? "", hoje: hojeBrasilia() });
+  const pessoas = validarPessoas({ competencia: texto(formData, "competencia"), clienteId: tomador?.clienteId ?? "", hoje: hojeBrasilia(), semTomador });
   if (!pessoas.ok) Object.assign(erros, pessoas.erros);
-  if (Object.keys(erros).length || !pessoas.ok || !tomador) return { erros };
-  const id = await gravarRascunho({ empresaId: empresa.id, usuarioId, id: rascunhoId, passo: 2, dados: { competencia: pessoas.valor.competencia, tomador } });
+  if (Object.keys(erros).length || !pessoas.ok || (!tomador && !semTomador)) return { erros };
+  const id = await gravarRascunho({ empresaId: empresa.id, usuarioId, id: rascunhoId, passo: 2, dados: { competencia: pessoas.valor.competencia, tomador: tomador ?? undefined, semTomador } });
   redirect(`/contribuinte/dps/${id}/servico`);
 }
 
@@ -93,7 +94,8 @@ export async function salvarServico(rascunhoId: string, _anterior: EstadoPasso, 
   if (!servicos.some((item) => item.id === servico.valor.modeloId)) return { erros: { servico: "Serviço indisponível para emissão" } };
   const rascunho = await carregarRascunho(contexto.empresa.id, rascunhoId);
   // Trocar de serviço pode mudar a alíquota: os valores precisam ser confirmados de novo.
-  const valores = rascunho?.dados.servico?.modeloId === servico.valor.modeloId ? rascunho.dados.valores : undefined;
+  const substituicao = rascunho?.dados.substituicao;
+  const valores = rascunho?.dados.servico?.modeloId === servico.valor.modeloId ? rascunho.dados.valores : substituicao ? { valorCentavos: substituicao.valorCentavos } : undefined;
   await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: rascunhoId, passo: 3, dados: { servico: servico.valor, valores } });
   redirect(`/contribuinte/dps/${rascunhoId}/valores`);
 }
@@ -105,9 +107,13 @@ export async function salvarValores(rascunhoId: string, _anterior: EstadoPasso, 
   if (!rascunho?.dados.servico) return { erros: {}, mensagem: "Escolha o serviço no passo 2 antes." };
   const servico = (await servicosProntos(contexto.empresa.id)).find((item) => item.id === rascunho.dados.servico?.modeloId);
   const exigeAliquota = Boolean(contexto.escritorio && servico?.exigeAliquotaManual);
-  const valores = validarValores({ valor: texto(formData, "valor"), aliquota: texto(formData, "aliquota"), fonte: texto(formData, "fonte"), exigeAliquota });
-  if (!valores.ok) return { erros: valores.erros };
-  await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: rascunhoId, passo: 4, dados: { valores: valores.valor } });
+  const substituicao = rascunho.dados.substituicao;
+  // Na substituição o valor fica travado no da nota original (como no Emissor Nacional).
+  const valor = substituicao ? centavosParaTexto(substituicao.valorCentavos) : texto(formData, "valor");
+  const valores = validarValores({ valor, aliquota: texto(formData, "aliquota"), fonte: texto(formData, "fonte"), exigeAliquota });
+  const motivo = substituicao ? validarMotivoSubstituicao({ codigo: texto(formData, "motivoCodigo"), motivo: texto(formData, "motivo") }) : null;
+  if (!valores.ok || (motivo && !motivo.ok)) return { erros: { ...(valores.ok ? {} : valores.erros), ...(motivo && !motivo.ok ? motivo.erros : {}) } };
+  await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: rascunhoId, passo: 4, dados: { valores: valores.valor, ...(substituicao && motivo?.ok ? { substituicao: { ...substituicao, motivoCodigo: motivo.valor.motivoCodigo, motivo: motivo.valor.motivo } } : {}) } });
   redirect(`/contribuinte/dps/${rascunhoId}/emitir`);
 }
 

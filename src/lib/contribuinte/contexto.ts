@@ -61,7 +61,7 @@ export async function exigirEmpresa() {
 /** Links que ainda apontam para as telas atuais, até o emissor novo ter a sua versão (passos 2 e 3). */
 export function rotasLegadas(escritorio: boolean) {
   return {
-    visualizar: (id: string) => (escritorio ? `/admin/notas/${id}` : `/app/notas/${id}`),
-    documento: (id: string, tipo: "NFSE_XML" | "PDF") => (escritorio ? `/api/admin/invoices/${id}/artifacts/${tipo}` : `/api/invoices/${id}/artifacts/${tipo}`),
+    visualizar: (id: string) => `/contribuinte/nfse/${id}`,
+    documento: (id: string, tipo: "NFSE_XML" | "PDF" | "CANCELLATION_EVENT_XML") => (escritorio ? `/api/admin/invoices/${id}/artifacts/${tipo}` : `/api/invoices/${id}/artifacts/${tipo}`),
   };
 }

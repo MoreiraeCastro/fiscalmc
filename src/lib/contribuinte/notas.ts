@@ -16,7 +16,9 @@ export type NotaLinha = {
 
 export const POR_PAGINA = 25;
 
-const CAMPOS = "id,status,amount_cents,service_date,created_at,issued_at,nfse_number,dps_number,environment,customers!inner(legal_name,tax_id)";
+// Nota sem tomador (Tomador não informado) também aparece: o !inner só entra quando há busca pelo tomador.
+const CAMPOS = "id,status,amount_cents,service_date,created_at,issued_at,nfse_number,dps_number,environment,customers(legal_name,tax_id)";
+const CAMPOS_BUSCA = CAMPOS.replace("customers(", "customers!inner(");
 
 type Bruta = { id: string; status: string; amount_cents: number; service_date: string; created_at: string; issued_at: string | null; nfse_number: string | null; environment: string; customers: Tomador | Tomador[] | null };
 type Tomador = { legal_name: string | null; tax_id: string | null };
@@ -26,7 +28,7 @@ function paraLinha(item: Bruta): NotaLinha {
   return {
     id: item.id,
     geracao: item.issued_at ?? item.created_at,
-    emitidaPara: { nome: tomador?.legal_name ?? "Tomador não informado", documento: tomador?.tax_id ?? null },
+    emitidaPara: { nome: tomador?.legal_name ?? "Não informado", documento: tomador?.tax_id ?? null },
     competencia: item.service_date,
     valorCentavos: item.amount_cents,
     status: item.status,
@@ -46,14 +48,14 @@ function termoSeguro(texto: string) {
  */
 export async function listarEmitidas(input: { empresaId: string; busca?: string; de?: string; ate?: string; pagina?: number }) {
   const pagina = Math.max(1, input.pagina ?? 1);
-  let query = createAdminClient().from("invoices").select(CAMPOS, { count: "exact" })
+  const termo = termoSeguro(input.busca ?? "");
+  let query = createAdminClient().from("invoices").select(termo ? CAMPOS_BUSCA : CAMPOS, { count: "exact" })
     .eq("organization_id", input.empresaId)
     .not("status", "in", "(DRAFT,READY)")
     .order("created_at", { ascending: false })
     .range((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA - 1);
   if (input.de) query = query.gte("created_at", inicioDoDiaBrasilia(input.de));
   if (input.ate) query = query.lt("created_at", inicioDoDiaBrasilia(somarDias(input.ate, 1)));
-  const termo = termoSeguro(input.busca ?? "");
   if (termo) {
     const digitos = termo.replace(/\D/g, "");
     const filtros = [`legal_name.ilike.*${termo}*`];
@@ -62,7 +64,7 @@ export async function listarEmitidas(input: { empresaId: string; busca?: string;
   }
   const { data, count, error } = await query;
   if (error) throw new Error("Não foi possível carregar as notas.");
-  return { linhas: (data as Bruta[] | null ?? []).map(paraLinha), total: count ?? 0, pagina };
+  return { linhas: ((data ?? []) as unknown as Bruta[]).map(paraLinha), total: count ?? 0, pagina };
 }
 
 /** Cartão "Últimas NFS-e emitidas nos últimos 30 dias" da Página Principal. */

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Building2, ChevronDown, LogOut } from "lucide-react";
+import { ChevronDown, LogOut } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { BASE_PATH } from "@/lib/base-path";
 import type { ContextoContribuinte } from "@/lib/contribuinte/contexto";
@@ -18,14 +18,13 @@ export function PortalShell({ contexto, children }: { contexto: ContextoContribu
           <Image src={`${BASE_PATH}/icon-192.png`} width={38} height={38} alt="" priority />
           <span><strong>Moreira &amp; Castro</strong><small>Portal Contribuinte · NFS-e</small></span>
         </Link>
-        <PortalNav />
+        <PortalNav escritorio={escritorio} />
         <div className="pc-perfil">
           {empresa ? (
             trocar
               ? <Link href="/contribuinte/empresa" className="pc-empresa" title="Trocar de empresa"><span><strong>{empresa.razaoSocial}</strong><small>{formatarDocumento(empresa.cnpj)}</small></span><ChevronDown size={16} aria-hidden /></Link>
               : <span className="pc-empresa"><span><strong>{empresa.razaoSocial}</strong><small>{formatarDocumento(empresa.cnpj)}</small></span></span>
           ) : <Link href="/contribuinte/empresa" className="pc-empresa vazia">Escolher empresa<ChevronDown size={16} aria-hidden /></Link>}
-          {escritorio ? <Link href="/admin" className="pc-icone" title="Área do escritório" aria-label="Área do escritório"><Building2 size={19} aria-hidden /></Link> : null}
           <form action={logout}><button type="submit" className="pc-icone" title="Sair com segurança" aria-label="Sair com segurança"><LogOut size={19} aria-hidden /></button></form>
         </div>
       </div>

@@ -5,12 +5,12 @@ import { PASSOS, type NumeroPasso } from "@/lib/contribuinte/dps";
 const ICONES = { 1: Users, 2: Building, 3: Receipt, 4: FileCheck2 } as const;
 
 /** Barra de passos do topo: Pessoas → Serviço → Valores → Emitir NFS-e (passos já liberados viram link). */
-export function BarraPassos({ atual, liberado, rascunhoId }: { atual: NumeroPasso; liberado: NumeroPasso; rascunhoId: string | null }) {
+export function BarraPassos({ atual, liberado, rascunhoId, substituicao = false }: { atual: NumeroPasso; liberado: NumeroPasso; rascunhoId: string | null; substituicao?: boolean }) {
   return <ol className="pc-passos" aria-label="Passos da emissão">
     {PASSOS.map((passo) => {
       const Icone = ICONES[passo.numero];
       const estado = passo.numero === atual ? "atual" : passo.numero < atual ? "feito" : "";
-      const conteudo = <><span className="pc-passo-icone"><Icone size={18} aria-hidden /></span><span>{passo.rotulo}</span></>;
+      const conteudo = <><span className="pc-passo-icone"><Icone size={18} aria-hidden /></span><span>{substituicao && passo.numero === 4 ? "Substituição" : passo.rotulo}</span></>;
       const podeIr = rascunhoId && passo.numero !== atual && passo.numero <= liberado;
       return <li key={passo.slug} className={estado} aria-current={passo.numero === atual ? "step" : undefined}>
         {podeIr ? <Link href={`/contribuinte/dps/${rascunhoId}/${passo.slug}`}>{conteudo}</Link> : <span>{conteudo}</span>}

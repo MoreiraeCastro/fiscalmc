@@ -10,19 +10,20 @@ import { apiUrl } from "@/lib/base-path";
 export type PedidoEmissao = {
   organizationId?: string;
   serviceTemplateId: string;
-  customerId: string;
+  customerId?: string;
   amount: string;
   serviceDate: string;
   description: string;
   manualIssRateBasisPoints?: number;
   manualIssRateSourceNote?: string;
+  substitution?: { invoiceId: string; reasonCode: string; reason?: string };
 };
 
 /**
  * "Emitir NFS-e": manda o rascunho para o motor de sempre (POST /api/invoices).
  * A chave de idempotência é do rascunho: clicar duas vezes ou recarregar nunca gera duas notas.
  */
-export function BotaoEmitir({ rascunhoId, chave, pedido, producao, voltar }: { rascunhoId: string; chave: string; pedido: PedidoEmissao; producao: boolean; voltar: string }) {
+export function BotaoEmitir({ rascunhoId, chave, pedido, producao, voltar, rotulo = "Emitir NFS-e" }: { rascunhoId: string; chave: string; pedido: PedidoEmissao; producao: boolean; voltar: string; rotulo?: string }) {
   const router = useRouter();
   const [confirmado, setConfirmado] = useState(false);
   const [emitindo, setEmitindo] = useState(false);
@@ -46,7 +47,7 @@ export function BotaoEmitir({ rascunhoId, chave, pedido, producao, voltar }: { r
           router.refresh();
           return;
         }
-        router.push(`/contribuinte/nfse/${corpo.invoiceId}`);
+        router.push(`/contribuinte/nfse/${corpo.invoiceId}?emitida=1`);
         return;
       }
       setErro(`${corpo.error ?? "Não foi possível concluir a emissão."}${corpo.requestId ? ` (código de atendimento: ${corpo.requestId})` : ""}`);
@@ -66,7 +67,7 @@ export function BotaoEmitir({ rascunhoId, chave, pedido, producao, voltar }: { r
     <footer className="pc-rodape-passo">
       <Link className="pc-botao secundario" href={voltar} aria-disabled={emitindo}>Voltar</Link>
       <button className="pc-botao destaque" type="button" onClick={emitir} disabled={emitindo || (producao && !confirmado)}>
-        {emitindo ? <><LoaderCircle className="spin" size={17} aria-hidden />Emitindo…</> : "Emitir NFS-e"}
+        {emitindo ? <><LoaderCircle className="spin" size={17} aria-hidden />Emitindo…</> : rotulo}
       </button>
     </footer>
   </div>;

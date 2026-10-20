@@ -36,7 +36,8 @@ function assertDomesticAddress(address: NonNullable<DpsPerson["address"]> | unde
 export async function assertDpsReadiness(input: {
   organization: DpsOrganizationReadiness;
   service: DpsServiceReadiness;
-  customer: DpsCustomerReadiness;
+  /** Ausente = Tomador/Adquirente não informado (a DPS sai sem o grupo toma, permitido pelo leiaute). */
+  customer?: DpsCustomerReadiness;
   fiscal: DpsFiscalConfiguration;
   verifyCertificate?: boolean;
   certificateProvider?:CertificateProvider;
@@ -49,9 +50,11 @@ export async function assertDpsReadiness(input: {
 
   if (!/^\d{6}$/.test(service.nationalTaxCode) || (service.municipalTaxCode && !/^\d{3}$/.test(service.municipalTaxCode)) || !/^\d{7}$/.test(service.locationMunicipalityCode)) incomplete("serviço");
 
-  const domesticId = customer.taxId?.replace(/\D/g, "");
-  if (!customer.name || !((domesticId?.length === 11 || domesticId?.length === 14) || customer.foreignTaxId || customer.noForeignTaxIdReason)) incomplete("tomador");
-  if (customer.address) assertDomesticAddress(customer.address, "tomador");
+  if (customer) {
+    const domesticId = customer.taxId?.replace(/\D/g, "");
+    if (!customer.name || !((domesticId?.length === 11 || domesticId?.length === 14) || customer.foreignTaxId || customer.noForeignTaxIdReason)) incomplete("tomador");
+    if (customer.address) assertDomesticAddress(customer.address, "tomador");
+  }
 
   if (!fiscal.regime || !fiscal.iss || !fiscal.totalTaxes || fiscal.ibsCbsRequired) incomplete("fiscal");
   if (!(["PARAMETRIZED_BY_NATIONAL", "EMITTER_PROVIDED"] as const).includes(fiscal.iss.rateSource)) incomplete("fiscal");

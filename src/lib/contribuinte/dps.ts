@@ -19,7 +19,39 @@ export const DESCRICAO_MAX = 1000;
 export type TomadorRascunho = { clienteId: string; documento: string | null; nome: string };
 export type ServicoRascunho = { modeloId: string; descricao: string };
 export type ValoresRascunho = { valorCentavos: number; aliquotaManualBp?: number; fonteAliquota?: string };
-export type DadosRascunho = { competencia?: string; tomador?: TomadorRascunho; servico?: ServicoRascunho; valores?: ValoresRascunho };
+/** Substituição: a nota original (travada) e o motivo exigido pelo grupo subst da DPS. */
+export type SubstituicaoRascunho = { notaId: string; chave: string; numero: string | null; competencia: string; valorCentavos: number; motivoCodigo?: MotivoSubstituicao; motivo?: string };
+export type DadosRascunho = { competencia?: string; tomador?: TomadorRascunho; /** Tomador/Adquirente não informado. */ semTomador?: boolean; servico?: ServicoRascunho; valores?: ValoresRascunho; substituicao?: SubstituicaoRascunho };
+
+export const MOTIVOS_SUBSTITUICAO = {
+  "01": "Desenquadramento de NFS-e do Simples Nacional",
+  "02": "Enquadramento de NFS-e no Simples Nacional",
+  "03": "Inclusão Retroativa de Imunidade/Isenção para NFS-e",
+  "04": "Exclusão Retroativa de Imunidade/Isenção para NFS-e",
+  "05": "Rejeição de NFS-e pelo tomador ou pelo intermediário se responsável pelo recolhimento do tributo",
+  "99": "Outros",
+} as const;
+export type MotivoSubstituicao = keyof typeof MOTIVOS_SUBSTITUICAO;
+
+export const MOTIVOS_CANCELAMENTO = { "1": "Erro na Emissão", "2": "Serviço não Prestado", "9": "Outros" } as const;
+export type MotivoCancelamento = keyof typeof MOTIVOS_CANCELAMENTO;
+
+/** Descrição do motivo (cancelamento e substituição): 15 a 255 caracteres, como no leiaute nacional. */
+export function validarDescricaoMotivo(texto: string, obrigatoria: boolean): string | null {
+  const limpo = texto.trim().replace(/\s+/g, " ");
+  if (!limpo) return obrigatoria ? OBRIGATORIO : null;
+  if (limpo.length < 15) return "Descreva com pelo menos 15 caracteres";
+  if (limpo.length > 255) return "Máximo de 255 caracteres";
+  return null;
+}
+
+export function validarCancelamento(entrada: { codigo: string; motivo: string }): Validacao<{ codigo: MotivoCancelamento; motivo: string }> {
+  const erros: Erros = {};
+  if (!(entrada.codigo in MOTIVOS_CANCELAMENTO)) erros.codigo = OBRIGATORIO;
+  const descricao = validarDescricaoMotivo(entrada.motivo, true);
+  if (descricao) erros.motivo = descricao;
+  return Object.keys(erros).length ? { ok: false, erros } : { ok: true, valor: { codigo: entrada.codigo as MotivoCancelamento, motivo: entrada.motivo.trim().replace(/\s+/g, " ") } };
+}
 
 /** Erros por campo, mostrados como "Campo obrigatório" embaixo de cada um (e a faixa amarela no topo). */
 export type Erros = Record<string, string>;
@@ -57,12 +89,12 @@ export function aliquotaEmPontosBase(texto: string): number | null {
   return bp >= 0 && bp <= 10000 ? bp : null;
 }
 
-export function validarPessoas(entrada: { competencia: string; clienteId: string; hoje: string }): Validacao<{ competencia: string; clienteId: string }> {
+export function validarPessoas(entrada: { competencia: string; clienteId: string; hoje: string; semTomador?: boolean }): Validacao<{ competencia: string; clienteId: string }> {
   const erros: Erros = {};
   if (!entrada.competencia) erros.competencia = OBRIGATORIO;
   else if (!DATA.test(entrada.competencia)) erros.competencia = "Data inválida";
   else if (entrada.competencia > entrada.hoje) erros.competencia = "A competência não pode ser posterior à data de hoje";
-  if (!entrada.clienteId) erros.tomador = "Informe o tomador: pesquise o CPF/CNPJ ou escolha nos últimos tomadores";
+  if (!entrada.clienteId && !entrada.semTomador) erros.tomador = "Informe o tomador: pesquise o CPF/CNPJ ou escolha nos últimos tomadores";
   return Object.keys(erros).length ? { ok: false, erros } : { ok: true, valor: { competencia: entrada.competencia, clienteId: entrada.clienteId } };
 }
 
@@ -113,10 +145,21 @@ export function validarValores(entrada: { valor: string; aliquota: string; fonte
 
 /** Até onde o rascunho permite ir: cada passo exige os anteriores completos. */
 export function passoLiberado(dados: DadosRascunho): NumeroPasso {
-  if (!dados.competencia || !dados.tomador) return 1;
+  if (!dados.competencia || (!dados.tomador && !dados.semTomador)) return 1;
   if (!dados.servico) return 2;
-  if (!dados.valores) return 3;
+  if (!dados.valores || (dados.substituicao && !dados.substituicao.motivoCodigo)) return 3;
   return 4;
+}
+
+/** Motivo da substituição (passo Valores): código obrigatório; descrição obrigatória só em "99 - Outros". */
+export function validarMotivoSubstituicao(entrada: { codigo: string; motivo: string }): Validacao<{ motivoCodigo: MotivoSubstituicao; motivo?: string }> {
+  const erros: Erros = {};
+  if (!(entrada.codigo in MOTIVOS_SUBSTITUICAO)) erros.motivoCodigo = OBRIGATORIO;
+  const descricao = validarDescricaoMotivo(entrada.motivo, entrada.codigo === "99");
+  if (descricao) erros.motivo = descricao;
+  if (Object.keys(erros).length) return { ok: false, erros };
+  const motivo = entrada.motivo.trim().replace(/\s+/g, " ");
+  return { ok: true, valor: { motivoCodigo: entrada.codigo as MotivoSubstituicao, ...(motivo ? { motivo } : {}) } };
 }
 
 /** Prévia dos valores (passo 4): ISSQN e valor líquido. Retido = descontado do líquido. */

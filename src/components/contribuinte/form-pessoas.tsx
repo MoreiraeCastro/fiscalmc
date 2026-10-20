@@ -11,7 +11,14 @@ import { Campo, FaixaValidacao, Leitura, Rodape } from "./campos";
 
 export type EmitenteResumo = { razaoSocial: string; cnpj: string; municipio: string; inscricaoMunicipal: string | null; opcaoSimples: string; apuracaoSimples: string | null; email: string | null; telefone: string | null; endereco: string };
 
-type Inicial = { competencia: string; tomador: { clienteId: string; documento: string | null; nome: string } | null };
+type Inicial = { competencia: string; tomador: { clienteId: string; documento: string | null; nome: string } | null; semTomador: boolean };
+
+/** Máscara de CPF (até 11 dígitos) ou CNPJ enquanto digita. */
+function mascaraDocumento(texto: string) {
+  const d = texto.replace(/\D/g, "").slice(0, 14);
+  if (d.length <= 11) return d.replace(/^(\d{3})(\d)/, "$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1-$2");
+  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})$/, "$1.$2.$3/$4-$5");
+}
 
 export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje }: { rascunhoId: string | null; inicial: Inicial; emitente: EmitenteResumo; tomadores: TomadorSalvo[]; hoje: string }) {
   const [estado, enviar, salvando] = useActionState<EstadoPasso, FormData>(salvarPessoas.bind(null, rascunhoId), { erros: {} });
@@ -27,6 +34,7 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje }: 
   const [aviso, setAviso] = useState("");
   const [consultando, iniciarConsulta] = useTransition();
   const [historico, setHistorico] = useState(false);
+  const [semTomador, setSemTomador] = useState(inicial.semTomador);
   const erros = estado.erros;
 
   function usarSalvo(item: TomadorSalvo) {
@@ -36,10 +44,10 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje }: 
   function limpar() {
     setClienteId(""); setDocumento(""); setNome(""); setEmail(""); setTelefone(""); setEndereco(null); setAviso("");
   }
-  function pesquisar() {
-    if (!documento.trim()) return;
+  function pesquisar(valor = documento) {
+    if (!valor.trim()) return;
     iniciarConsulta(async () => {
-      const resposta = await consultarTomador(documento);
+      const resposta = await consultarTomador(valor);
       if (resposta.salvo) { usarSalvo(resposta.salvo); setAviso("Tomador já cadastrado para esta empresa."); return; }
       setClienteId("");
       if (resposta.receita) {
@@ -85,21 +93,27 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje }: 
     <Cartao titulo="Tomador/Adquirente do serviço">
       <fieldset className="pc-opcoes">
         <legend>Onde está localizado o estabelecimento/domicílio?<span className="pc-obrigatorio"> *</span></legend>
-        <label><input type="radio" checked readOnly /> Brasil</label>
+        <label><input type="radio" name="onde" value="BRASIL" checked={!semTomador} onChange={() => setSemTomador(false)} /> Brasil</label>
         <label className="desativado" title="Ainda não disponível no nosso emissor"><input type="radio" disabled /> Exterior <small>em breve</small></label>
-        <label className="desativado" title="O nosso motor exige o tomador"><input type="radio" disabled /> Tomador/Adquirente não informado</label>
+        <label><input type="radio" name="onde" value="NAO_INFORMADO" checked={semTomador} onChange={() => setSemTomador(true)} /> Tomador/Adquirente não informado</label>
       </fieldset>
       <input type="hidden" name="clienteId" value={clienteId} />
       <input type="hidden" name="endereco" value={endereco ? JSON.stringify(endereco) : ""} />
+      {semTomador ? <p className="pc-nota">A NFS-e sai sem tomador. Use só quando não houver tomador identificado.</p> : <>
       <div className="pc-grade">
         <Campo rotulo="CPF/CNPJ" obrigatorio erro={erros.documento ?? erros.tomador} id="documento" largura="meia">
           <div className="pc-com-botoes">
             <input id="documento" name="documento" inputMode="numeric" autoComplete="off" value={documento} readOnly={Boolean(clienteId)}
-              onChange={(e) => { setDocumento(e.target.value); setAviso(""); }}
-              onBlur={() => { if (!clienteId && documento.replace(/\D/g, "").length >= 11) pesquisar(); }}
+              onChange={(e) => {
+                const valor = mascaraDocumento(e.target.value);
+                setDocumento(valor); setAviso("");
+                // CNPJ completo: puxa o cartão CNPJ (razão social, contato e endereço) na hora, sem precisar da lupa.
+                if (valor.replace(/\D/g, "").length === 14) pesquisar(valor);
+              }}
+              onBlur={() => { if (!clienteId && !nome && documento.replace(/\D/g, "").length === 11) pesquisar(); }}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); pesquisar(); } }} />
             {clienteId ? <button type="button" className="pc-icone-botao" title="Trocar tomador" aria-label="Trocar tomador" onClick={limpar}><X size={17} aria-hidden /></button>
-              : <button type="button" className="pc-icone-botao" title="Pesquisar" aria-label="Pesquisar CPF/CNPJ" onClick={pesquisar} disabled={consultando}>{consultando ? <LoaderCircle className="spin" size={17} aria-hidden /> : <Search size={17} aria-hidden />}</button>}
+              : <button type="button" className="pc-icone-botao" title="Pesquisar" aria-label="Pesquisar CPF/CNPJ" onClick={() => pesquisar()} disabled={consultando}>{consultando ? <LoaderCircle className="spin" size={17} aria-hidden /> : <Search size={17} aria-hidden />}</button>}
             <button type="button" className="pc-icone-botao" title="Últimos Tomadores" aria-label="Últimos Tomadores" onClick={() => setHistorico(true)}><History size={17} aria-hidden /></button>
           </div>
         </Campo>
@@ -114,6 +128,7 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje }: 
       {aviso ? <p className="pc-nota">{aviso}</p> : null}
       {endereco && !clienteId ? <p className="pc-nota">Endereço: {[endereco.street, endereco.addressNumber, endereco.addressComplement, endereco.neighborhood].filter(Boolean).join(", ")} · CEP {endereco.postalCode} · {endereco.state}</p> : null}
       {!clienteId && nome && documento ? <p className="pc-nota">Ao avançar, este tomador fica salvo para as próximas notas da empresa.</p> : null}
+      </>}
     </Cartao>
 
     <Cartao titulo="Intermediário do serviço">

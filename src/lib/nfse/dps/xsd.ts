@@ -17,8 +17,17 @@ export class DpsXsdRuntimeError extends Error{
 
 /** Validates against the official, environment-specific DPS_v1.01 bundle entirely offline. */
 export async function validateDpsXml(xml:string,environment:NFSeEnvironment="PRODUCTION_RESTRICTED"):Promise<DpsXsdValidation>{
+  return validateAgainstOfficialSchema(mainSchema,xml,environment);
+}
+
+/** Same offline validation for the event request (pedRegEvento_v1.01: cancelamento etc.). */
+export async function validateEventRequestXml(xml:string,environment:NFSeEnvironment="PRODUCTION_RESTRICTED"):Promise<DpsXsdValidation>{
+  return validateAgainstOfficialSchema("pedRegEvento_v1.01.xsd",xml,environment);
+}
+
+async function validateAgainstOfficialSchema(mainSchemaFile:string,xml:string,environment:NFSeEnvironment):Promise<DpsXsdValidation>{
   const schemas=await loadDpsSchemas(environment);
-  const schema=schemas.find(file=>file.fileName===mainSchema);
+  const schema=schemas.find(file=>file.fileName===mainSchemaFile);
   if(!schema)throw new DpsXsdRuntimeError("SCHEMA_MAIN_NOT_FOUND");
   registerOfficialSchemaProvider(schemas,environment);
   let schemaDocument:XmlDocument|undefined;

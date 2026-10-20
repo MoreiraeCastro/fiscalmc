@@ -7,7 +7,9 @@ import { FormServico } from "@/components/contribuinte/form-servico";
 import { FormValores, type PreviaTela } from "@/components/contribuinte/form-valores";
 import { BotaoEmitir } from "@/components/contribuinte/botao-emitir";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
-import { centavosParaTexto, passoLiberado, passoPorSlug, previaValores, type DadosRascunho } from "@/lib/contribuinte/dps";
+import { centavosParaTexto, MOTIVOS_SUBSTITUICAO, passoLiberado, passoPorSlug, previaValores, type DadosRascunho } from "@/lib/contribuinte/dps";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { relationOne } from "@/lib/presentation/relations";
 import { ambienteEmissao, dadosEmitente, previaTributacao, servicosProntos, tomadoresSalvos, tomadorPorId, type Previa } from "@/lib/contribuinte/emissao";
 import { formatarData, formatarDocumento, formatarValor, hojeBrasilia } from "@/lib/contribuinte/formato";
 import { nomeMunicipio } from "@/lib/contribuinte/municipios";
@@ -37,10 +39,18 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
   if (rascunho && passo.numero > liberado) redirect(`/contribuinte/dps/${rascunho.id}/${["pessoas", "servico", "valores", "emitir"][liberado - 1]}`);
   const rascunhoId = rascunho?.id ?? null;
 
+  const subst = dados.substituicao;
   const cabecalho = <>
-    <Trilha itens={["Emissão Completa", passo.rotulo]} />
-    <h1 className="pc-titulo">Emissão completa</h1>
-    <BarraPassos atual={passo.numero} liberado={liberado} rascunhoId={rascunhoId} />
+    <Trilha itens={[subst ? "Substituição de NFS-e" : "Emissão Completa", subst && passo.numero === 4 ? "Substituição" : passo.rotulo]} />
+    <h1 className="pc-titulo">{subst ? "Substituição de NFS-e" : "Emissão completa"}</h1>
+    <BarraPassos atual={passo.numero} liberado={liberado} rascunhoId={rascunhoId} substituicao={Boolean(subst)} />
+    {subst ? <Cartao titulo="Substituição de NFS-e" className="pc-subst">
+      <dl className="pc-resumo">
+        <div><dt>Chave de acesso da NFS-e substituída</dt><dd className="mono"><Link className="pc-link" href={`/contribuinte/nfse/${subst.notaId}`}>{subst.chave}</Link></dd></div>
+        <div><dt>Data de competência</dt><dd>{formatarData(subst.competencia)}</dd></div>
+        <div><dt>Valor do serviço</dt><dd>R$ {formatarValor(subst.valorCentavos)}</dd></div>
+      </dl>
+    </Cartao> : null}
     {!empresa.podeEmitir ? <Aviso tipo="alerta">Seu usuário consulta esta empresa, mas não tem permissão para emitir por ela.</Aviso> : null}
     {empresa.emissaoBloqueada ? <Aviso tipo="alerta">A emissão desta empresa está <strong>bloqueada</strong> até o escritório concluir o cadastro. Dá para preencher o rascunho, mas não emitir.</Aviso> : null}
   </>;
@@ -48,7 +58,7 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
   if (passo.slug === "pessoas") {
     const [emitente, tomadores] = await Promise.all([dadosEmitente(empresa.id), tomadoresSalvos(empresa.id)]);
     return <>{cabecalho}<FormPessoas rascunhoId={rascunhoId} hoje={hojeBrasilia()} tomadores={tomadores}
-      inicial={{ competencia: dados.competencia ?? hojeBrasilia(), tomador: dados.tomador ?? null }}
+      inicial={{ competencia: dados.competencia ?? hojeBrasilia(), tomador: dados.tomador ?? null, semTomador: Boolean(dados.semTomador) }}
       emitente={{ ...emitente, municipio: nomeMunicipio(emitente.municipio) }} /></>;
   }
 
@@ -65,6 +75,7 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
 
   if (passo.slug === "valores") {
     return <>{cabecalho}<FormValores rascunhoId={rascunhoId!} simples={emitente.simples} exigeAliquota={exigeAliquota} previa={previaParaTela(previa)}
+      substituicao={subst ? { motivoCodigo: subst.motivoCodigo ?? "", motivo: subst.motivo ?? "" } : undefined}
       inicial={{ valor: dados.valores ? centavosParaTexto(dados.valores.valorCentavos) : "", aliquota: dados.valores?.aliquotaManualBp !== undefined ? (dados.valores.aliquotaManualBp / 100).toFixed(2).replace(".", ",") : "", fonte: dados.valores?.fonteAliquota ?? "" }} /></>;
   }
 
@@ -73,17 +84,32 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
   const valores = dados.valores!;
   const contas = previaValores({ valorCentavos: valores.valorCentavos, aliquotaBp: previa?.aliquotaBp, retido: previa?.retido ?? false });
   const producao = ambienteEmissao() === "PRODUCAO";
+  const original = subst ? await notaOriginal(empresa.id, subst.notaId) : null;
   const editar = (alvo: string) => <Link className="pc-link" href={`/contribuinte/dps/${rascunhoId}/${alvo}`}>Editar</Link>;
   const enderecoTomador = tomador ? [tomador.street, tomador.address_number, tomador.address_complement, tomador.neighborhood].filter(Boolean).join(", ") : "";
   return <>
     {cabecalho}
-    <Aviso>Revise a sua DPS e confira o cálculo prévio do imposto. Estando tudo certo, clique em <strong>Emitir NFS-e</strong>.</Aviso>
+    {subst ? <Aviso>Revise a DPS comparando com a NFS-e que será substituída. Os campos <span className="pc-mudou">destacados</span> mudaram. Ao emitir, a original fica cancelada por substituição.</Aviso>
+      : <Aviso>Revise a sua DPS e confira o cálculo prévio do imposto. Estando tudo certo, clique em <strong>Emitir NFS-e</strong>.</Aviso>}
+    {subst && original ? <Cartao titulo="Comparação">
+      <div className="pc-tabela-rolagem"><table className="pc-tabela pc-comparacao">
+        <thead><tr><th>Campo</th><th>NFS-e original</th><th>NFS-e substituta</th></tr></thead>
+        <tbody>{[
+          ["Competência", formatarData(original.competencia), formatarData(dados.competencia)],
+          ["Tomador", original.tomador, tomador ? `${formatarDocumento(tomador.tax_id)} - ${tomador.legal_name}` : "—"],
+          ["Serviço", original.servico, servico ? `${servico.codigo ?? ""} - ${servico.descricaoCodigo ?? servico.nome}` : "—"],
+          ["Descrição", original.descricao, dados.servico?.descricao ?? ""],
+          ["Valor do serviço", `R$ ${formatarValor(original.valorCentavos)}`, `R$ ${formatarValor(valores.valorCentavos)}`],
+        ].map(([campo, antes, depois]) => <tr key={campo}><td>{campo}</td><td className="pre">{antes}</td><td className={`pre${antes !== depois ? " pc-mudou" : ""}`}>{depois}</td></tr>)}</tbody>
+      </table></div>
+      <dl className="pc-resumo"><div><dt>Motivo da substituição</dt><dd>{subst.motivoCodigo ? `${subst.motivoCodigo} - ${MOTIVOS_SUBSTITUICAO[subst.motivoCodigo]}` : "—"}{subst.motivo ? ` · ${subst.motivo}` : ""}</dd></div></dl>
+    </Cartao> : null}
     <Cartao titulo="Pessoas" acoes={editar("pessoas")}>
       <dl className="pc-resumo">
         <div><dt>Data de competência</dt><dd>{formatarData(dados.competencia)}</dd></div>
         <div><dt>Emitente</dt><dd>{formatarDocumento(emitente.cnpj)} - {emitente.razaoSocial}</dd></div>
         <div><dt>Opção no Simples Nacional</dt><dd>{emitente.opcaoSimples}</dd></div>
-        <div><dt>Tomador</dt><dd>{tomador ? `${formatarDocumento(tomador.tax_id)} - ${tomador.legal_name}` : "—"}</dd></div>
+        <div><dt>Tomador</dt><dd>{tomador ? `${formatarDocumento(tomador.tax_id)} - ${tomador.legal_name}` : "Não informado"}</dd></div>
         {tomador?.municipality_code || enderecoTomador ? <div><dt>Endereço do tomador</dt><dd>{[enderecoTomador, tomador?.municipality_code ? nomeMunicipio(tomador.municipality_code) : "", tomador?.postal_code ? `CEP ${tomador.postal_code}` : ""].filter(Boolean).join(" · ")}</dd></div> : null}
         <div><dt>Intermediário</dt><dd>Não informado</dd></div>
       </dl>
@@ -127,12 +153,28 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
       {emitente.simples ? <p className="pc-nota">Empresa do Simples Nacional: o ISSQN mostrado é informativo; o recolhimento segue o regime de apuração do Simples.</p> : null}
     </Cartao>
     {!servico ? <Aviso tipo="erro">O serviço escolhido não está mais pronto para emissão. Volte ao passo Serviço.</Aviso>
-      : empresa.podeEmitir && !empresa.emissaoBloqueada && tomador ? <BotaoEmitir rascunhoId={rascunhoId!} chave={rascunho!.chave} producao={producao} voltar={`/contribuinte/dps/${rascunhoId}/valores`}
+      : empresa.podeEmitir && !empresa.emissaoBloqueada && (tomador || dados.semTomador) ? <BotaoEmitir rascunhoId={rascunhoId!} chave={rascunho!.chave} producao={producao} voltar={`/contribuinte/dps/${rascunhoId}/valores`} rotulo={subst ? "Emitir NFS-e Substituta" : "Emitir NFS-e"}
         pedido={{
           ...(escritorio ? { organizationId: empresa.id } : {}),
-          serviceTemplateId: servico.id, customerId: tomador.id, amount: (valores.valorCentavos / 100).toFixed(2), serviceDate: dados.competencia!, description: dados.servico!.descricao,
+          serviceTemplateId: servico.id, ...(tomador && !dados.semTomador ? { customerId: tomador.id } : {}), amount: (valores.valorCentavos / 100).toFixed(2), serviceDate: dados.competencia!, description: dados.servico!.descricao,
+          ...(subst?.motivoCodigo ? { substitution: { invoiceId: subst.notaId, reasonCode: subst.motivoCodigo, ...(subst.motivo ? { reason: subst.motivo } : {}) } } : {}),
           ...(exigeAliquota && valores.aliquotaManualBp !== undefined && valores.fonteAliquota ? { manualIssRateBasisPoints: valores.aliquotaManualBp, manualIssRateSourceNote: valores.fonteAliquota } : {}),
         }} />
       : null}
   </>;
+}
+
+/** Dados da nota que está sendo substituída, para a comparação do passo 4. */
+async function notaOriginal(empresaId: string, notaId: string) {
+  const { data } = await createAdminClient().from("invoices").select("service_date,amount_cents,description,customers(tax_id,legal_name),service_templates(name,national_service_codes(display_code,description))")
+    .eq("organization_id", empresaId).eq("id", notaId).maybeSingle();
+  if (!data) return null;
+  const tomador = relationOne(data.customers);
+  const modelo = relationOne(data.service_templates);
+  const codigo = relationOne(modelo?.national_service_codes);
+  return {
+    competencia: data.service_date, valorCentavos: data.amount_cents, descricao: data.description,
+    tomador: tomador ? `${formatarDocumento(tomador.tax_id)} - ${tomador.legal_name}` : "—",
+    servico: codigo ? `${codigo.display_code} - ${codigo.description}` : modelo?.name ?? "—",
+  };
 }

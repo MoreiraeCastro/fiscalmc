@@ -26,7 +26,7 @@ export function TabelaNotas({ linhas, municipio, escritorio }: { linhas: NotaLin
           <td>{municipio}</td>
           <td className="num">{formatarValor(nota.valorCentavos)}</td>
           <td><SituacaoNota status={nota.status} /></td>
-          <td className="acoes"><MenuNota visualizar={rotas.visualizar(nota.id)} xml={apiUrl(rotas.documento(nota.id, "NFSE_XML"))} danfse={apiUrl(rotas.documento(nota.id, "PDF"))} gerada={gerada} /></td>
+          <td className="acoes"><MenuNota visualizar={rotas.visualizar(nota.id)} xml={apiUrl(rotas.documento(nota.id, "NFSE_XML"))} danfse={apiUrl(rotas.documento(nota.id, "PDF"))} gerada={gerada} emitida={nota.status === "ISSUED"} /></td>
         </tr>;
       })}</tbody>
     </table>

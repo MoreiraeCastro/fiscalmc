@@ -11,13 +11,24 @@ type PersistInput={
   contentType:"application/xml"|"application/pdf";
 };
 
-export function officialArtifactStoragePath(input:Pick<PersistInput,"invoiceId"|"organizationId"|"artifactType">){
-  const file=input.artifactType==="NFSE_XML"?"nfse.xml":"danfse.pdf";
+type StoredArtifactType=PersistInput["artifactType"]|"CANCELLATION_EVENT_XML";
+
+export function officialArtifactStoragePath(input:{invoiceId:string;organizationId:string;artifactType:StoredArtifactType}){
+  const file=input.artifactType==="NFSE_XML"?"nfse.xml":input.artifactType==="CANCELLATION_EVENT_XML"?"evento-cancelamento.xml":"danfse.pdf";
   return `${input.organizationId}/${input.invoiceId}/${file}`;
 }
 
 /** Stores documents only in the private bucket and records no document body in audit data. */
 export async function persistOfficialArtifact(input:PersistInput){
+  return persistArtifact(input);
+}
+
+/** XML do evento de cancelamento (101101) devolvido pela SEFIN. */
+export async function persistCancellationEventArtifact(input:Omit<PersistInput,"artifactType"|"contentType">){
+  return persistArtifact({...input,artifactType:"CANCELLATION_EVENT_XML",contentType:"application/xml"});
+}
+
+async function persistArtifact(input:Omit<PersistInput,"artifactType">&{artifactType:StoredArtifactType}){
   const db=createAdminClient();
   const privateStoragePath=officialArtifactStoragePath(input);
   const checksum=createHash("sha256").update(input.content).digest("hex");

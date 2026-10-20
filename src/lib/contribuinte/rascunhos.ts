@@ -66,3 +66,27 @@ export async function registrarResultado(input: { empresaId: string; id: string;
   await db.from("invoice_drafts").update({ ...mudanca, updated_by: input.usuarioId, updated_at: new Date().toISOString() })
     .eq("organization_id", input.empresaId).eq("id", input.id).is("invoice_id", null);
 }
+
+/**
+ * Substituir: cria o rascunho com os dados da nota original (como o portal, que abre os 4 passos preenchidos).
+ * Se já houver um rascunho aberto substituindo a mesma nota, reaproveita.
+ */
+export async function criarRascunhoDeSubstituicao(input: { empresaId: string; usuarioId: string; notaId: string }): Promise<string | null> {
+  const db = createAdminClient();
+  const { data: nota } = await db.from("invoices").select("id,status,access_key,nfse_number,service_date,amount_cents,description,customer_id,service_template_id,customers(tax_id,legal_name)")
+    .eq("organization_id", input.empresaId).eq("id", input.notaId).maybeSingle();
+  if (!nota || nota.status !== "ISSUED" || !nota.access_key) return null;
+  const { data: abertos } = await db.from("invoice_drafts").select("id,data").eq("organization_id", input.empresaId).is("invoice_id", null).order("updated_at", { ascending: false }).limit(200);
+  const existente = (abertos ?? []).find((item) => (item.data as DadosRascunho | null)?.substituicao?.notaId === nota.id);
+  if (existente) return existente.id as string;
+  const tomador = Array.isArray(nota.customers) ? nota.customers[0] : nota.customers;
+  const dados: DadosRascunho = {
+    competencia: nota.service_date,
+    ...(nota.customer_id ? { tomador: { clienteId: nota.customer_id, documento: tomador?.tax_id ?? null, nome: tomador?.legal_name ?? "" } } : { semTomador: true }),
+    servico: { modeloId: nota.service_template_id, descricao: nota.description },
+    valores: { valorCentavos: nota.amount_cents },
+    substituicao: { notaId: nota.id, chave: nota.access_key, numero: nota.nfse_number, competencia: nota.service_date, valorCentavos: nota.amount_cents },
+  };
+  const { data, error } = await db.from("invoice_drafts").insert({ organization_id: input.empresaId, step: 3, data: dados, created_by: input.usuarioId, updated_by: input.usuarioId }).select("id").single();
+  return error || !data ? null : (data.id as string);
+}

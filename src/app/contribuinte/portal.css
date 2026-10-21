@@ -243,8 +243,6 @@ select.pc-input { appearance: auto; }
 .pc-subnav a { padding: 6px 10px; border-radius: 7px; color: #dce8f5; font-size: 13.5px; font-weight: 600; }
 .pc-subnav a:hover { background: rgba(255,255,255,.1); }
 .pc-subnav a.ativo { background: var(--emerald); color: #fff; }
-.pc-escritorio { background: #fff; border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
-.pc-escritorio > .page { width: auto; margin: 0; padding: 20px 22px 32px; }
 
 /* ---- Seletor de empresa (menu suspenso do topo) ---- */
 .pc-seletor { position: relative; }
@@ -275,3 +273,28 @@ select.pc-input { appearance: auto; }
 .pc-favorito-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
 .pc-favorito-inline .pc-input { width: min(320px, 100%); min-height: 34px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; }
 .pc-link.botao { display: inline-flex; align-items: center; gap: 5px; }
+
+/* ---- Aba Escritório no visual do portal (as telas usam as classes v2 de globals.css) ---- */
+.pc-escritorio { min-width: 0; }
+.pc-escritorio > .page { width: auto; margin: 0; padding: 0; display: grid; gap: 14px; }
+.pc-escritorio .v2-page-header { align-items: center; }
+.pc-escritorio .v2-page-header h1, .pc-escritorio .v2-company-header h1 { font-size: 22px; letter-spacing: -.02em; }
+.pc-escritorio .v2-page-header p, .pc-escritorio .v2-company-header p { margin-top: 4px; font-size: 13.5px; }
+.pc-escritorio .v2-back-link { font-size: 13px; color: var(--navy-3); font-weight: 600; }
+.pc-escritorio .v2-panel { border-radius: 10px; }
+.pc-escritorio .v2-panel-heading { min-height: 0; padding: 14px 18px; }
+.pc-escritorio .v2-panel-heading h2 { font-size: 13px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--emerald-dark); }
+.pc-escritorio .v2-panel-heading p { font-size: 12.5px; }
+.pc-escritorio .button { min-height: 38px; border-radius: 8px; padding: 0 14px; font-size: 14px; font-weight: 650; }
+.pc-escritorio .button.primary { background: var(--navy); }
+.pc-escritorio .button.primary:hover { background: var(--navy-2); }
+.pc-escritorio .button.secondary { color: var(--navy); border-color: var(--border); }
+.pc-escritorio .button.compact { min-height: 32px; padding: 0 10px; font-size: 12.5px; }
+.pc-escritorio .v2-table { font-size: 13.5px; }
+.pc-escritorio .v2-table th { font-size: 12px; font-weight: 700; color: var(--muted); background: #fff; border-bottom: 2px solid var(--border); padding: 8px 12px; }
+.pc-escritorio .v2-table td { padding: 9px 12px; }
+.pc-escritorio .v2-table tbody tr:hover { background: #f7f9fb; }
+.pc-escritorio .tabs.v2-tabs { border-bottom: 2px solid var(--border); gap: 4px; }
+.pc-escritorio .tabs.v2-tabs a { padding: 9px 14px; margin-bottom: -2px; border-bottom: 3px solid transparent; border-radius: 0; background: none; font-size: 14px; font-weight: 650; color: var(--muted); }
+.pc-escritorio .tabs.v2-tabs a.active { color: var(--navy); border-bottom-color: var(--orange); background: none; }
+.pc-escritorio input:not([type="radio"]):not([type="checkbox"]), .pc-escritorio select, .pc-escritorio textarea { border-radius: 8px; }

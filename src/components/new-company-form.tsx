@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building2, ChevronLeft, CircleAlert, LoaderCircle, MapPin, ShieldCheck } from "lucide-react";
+import { Building2, ChevronLeft, CircleAlert, KeyRound, LoaderCircle, MapPin, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiUrl } from "@/lib/base-path";
@@ -22,16 +22,40 @@ function formatCep(value:string){const x=digits(value).slice(0,8);return x.repla
 function formatPhone(value:string){const x=digits(value).slice(0,11);if(x.length<3)return x;return x.length<11?x.replace(/(\d{2})(\d)/,"($1) $2").replace(/(\d{4})(\d)/,"$1-$2"):x.replace(/(\d{2})(\d)/,"($1) $2").replace(/(\d{5})(\d)/,"$1-$2");}
 function isValidCnpj(value:string){const cnpj=digits(value);if(!/^\d{14}$/.test(cnpj)||/^([0-9])\1+$/.test(cnpj))return false;const check=(base:string,weights:number[])=>{const total=weights.reduce((sum,weight,index)=>sum+Number(base[index])*weight,0);const remainder=total%11;return remainder<2?0:11-remainder;};return Number(cnpj[12])===check(cnpj.slice(0,12),[5,4,3,2,9,8,7,6,5,4,3,2])&&Number(cnpj[13])===check(cnpj.slice(0,13),[6,5,4,3,2,9,8,7,6,5,4,3,2]);}
 
-export function NewCompanyForm({organizationId,initialValues}:{organizationId?:string;initialValues?:Partial<CompanyFormState>}){
+type CertificateInfo={taxId:string;holder:string;validUntil:string};
+
+export function NewCompanyForm({organizationId,initialValues,canWriteCertificate=false}:{organizationId?:string;initialValues?:Partial<CompanyFormState>;canWriteCertificate?:boolean}){
   const router=useRouter();
   const[form,setForm]=useState<CompanyFormState>({...initialForm,...initialValues});
   const[error,setError]=useState("");
   const[saving,setSaving]=useState(false);
   const[lookingUp,setLookingUp]=useState(false);
   const[lookupNotice,setLookupNotice]=useState("");
+  // Certificado A1 no cadastro: lido antes (preenche o CNPJ) e gravado no cofre logo depois de criar a empresa.
+  const creating=!organizationId;
+  const[certFile,setCertFile]=useState<File|null>(null);
+  const[certPassword,setCertPassword]=useState("");
+  const[certInfo,setCertInfo]=useState<CertificateInfo|null>(null);
+  const[certError,setCertError]=useState("");
+  const[certReading,setCertReading]=useState(false);
+  const[withoutCertificate,setWithoutCertificate]=useState(!canWriteCertificate);
   const set=(field:keyof CompanyFormState,value:string)=>setForm(current=>({...current,[field]:value}));
-  async function lookupCnpj(){
-    const cnpj=digits(form.taxId);
+  async function readCertificate(){
+    if(!certFile||!certPassword){setCertError("Selecione o arquivo A1 e informe a senha.");return;}
+    setCertReading(true);setCertError("");setCertInfo(null);
+    const body=new FormData();body.set("file",certFile);body.set("password",certPassword);
+    try{
+      const response=await fetch(apiUrl("/api/admin/organizations/certificate-inspect"),{method:"POST",body});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok){setCertError(data.error??"Não foi possível ler o certificado.");return;}
+      setCertInfo(data.certificate);
+      setForm(current=>({...current,taxId:formatCnpj(data.certificate.taxId)}));
+      await lookupCnpj(data.certificate.taxId);
+    }catch{setCertError("Não foi possível ler o certificado agora.");}
+    finally{setCertReading(false);}
+  }
+  async function lookupCnpj(cnpjFromCertificate?:string){
+    const cnpj=digits(cnpjFromCertificate??form.taxId);
     if(cnpj.length!==14)return;
     setLookingUp(true);setLookupNotice("");
     try{
@@ -64,25 +88,48 @@ export function NewCompanyForm({organizationId,initialValues}:{organizationId?:s
     setError("");
     if(!isValidCnpj(form.taxId)){setError("Informe um CNPJ válido para continuar.");return;}
     if(!/^\d{7}$/.test(digits(form.municipalityCode))){setError("Informe o código IBGE de 7 dígitos do município.");return;}
+    if(creating&&!withoutCertificate){
+      if(!certInfo){setError("Leia o certificado A1 (botão \"Ler certificado\") ou marque que vai cadastrar a empresa sem certificado.");return;}
+      if(certInfo.taxId!==digits(form.taxId)){setError("O CNPJ do cadastro é diferente do CNPJ do certificado A1.");return;}
+    }
     setSaving(true);
     try{
       const response=await fetch(apiUrl("/api/admin/organizations"),{method:organizationId?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(organizationId?{id:organizationId,...form}:form)});
       const data=await response.json().catch(()=>null);
       if(!response.ok){setError(data?.error??"Não foi possível criar a empresa. Revise os dados e tente novamente.");return;}
       if(organizationId){router.refresh();return;}
-      router.push(`/admin/empresas/${data.organization.id}`);
+      const newId=data.organization.id as string;
+      if(creating&&!withoutCertificate&&certFile){
+        const body=new FormData();body.set("file",certFile);body.set("password",certPassword);
+        const certResponse=await fetch(apiUrl(`/api/admin/organizations/${newId}/certificate`),{method:"POST",body}).catch(()=>null);
+        if(!certResponse?.ok){router.push(`/admin/empresas/${newId}?tab=certificate&certificado=falhou`);return;}
+      }
+      router.push(`/admin/empresas/${newId}`);
     }catch{setError("Não foi possível salvar agora. Verifique a conexão e tente novamente.");}
     finally{setSaving(false);}
   }
   return <div className="company-onboarding">
     <form className="company-form" onSubmit={save} noValidate>
+      {creating?<section className="company-form-section" aria-labelledby="company-certificate">
+        <div className="form-section-heading"><span className="form-section-icon"><KeyRound size={20}/></span><div><h2 id="company-certificate">Certificado digital A1</h2><p>Comece pelo A1 da empresa: ele preenche o CNPJ e já fica guardado no cofre, pronto para emitir. Arquivo e senha são tratados só no servidor.</p></div></div>
+        {canWriteCertificate?<>
+          {!withoutCertificate?<div className="company-form-grid">
+            <Field label="Arquivo A1 (.pfx ou .p12)" required htmlFor="cert-file" className="span-2"><input className="input" id="cert-file" type="file" accept=".pfx,.p12,application/x-pkcs12,application/octet-stream" onChange={event=>{setCertFile(event.target.files?.[0]??null);setCertInfo(null);}}/></Field>
+            <Field label="Senha do certificado" required htmlFor="cert-password"><input className="input" id="cert-password" type="password" autoComplete="new-password" value={certPassword} onChange={event=>{setCertPassword(event.target.value);setCertInfo(null);}}/></Field>
+            <Field label="&nbsp;" htmlFor="cert-read"><button className="button secondary" type="button" id="cert-read" disabled={certReading||!certFile||!certPassword} onClick={readCertificate}>{certReading?"Lendo…":"Ler certificado"}</button></Field>
+          </div>:null}
+          {certError?<div className="alert error" role="alert"><CircleAlert size={18}/>{certError}</div>:null}
+          {certInfo&&!withoutCertificate?<div className="alert success" role="status">Certificado válido até {new Intl.DateTimeFormat("pt-BR").format(new Date(certInfo.validUntil))} · {certInfo.holder} · CNPJ {formatCnpj(certInfo.taxId)}. Ele será gravado junto com o cadastro.</div>:null}
+          <label className="checkbox-line"><input type="checkbox" checked={withoutCertificate} onChange={event=>setWithoutCertificate(event.target.checked)}/> Cadastrar a empresa sem certificado agora (enviar depois, na aba Certificado)</label>
+        </>:<div className="alert" role="status">Somente superadministradores cadastram o certificado A1. A empresa será criada sem certificado; um superadministrador envia depois, na aba Certificado.</div>}
+      </section>:null}
       <section className="company-form-section" aria-labelledby="company-identification">
         <div className="form-section-heading"><span className="form-section-icon"><Building2 size={20}/></span><div><h2 id="company-identification">Identificação da empresa</h2><p>Use os dados cadastrais oficiais. Os campos marcados com * são necessários agora.</p></div></div>
         <div className="company-form-grid">
           <Field label="Razão social" required htmlFor="legal-name" className="span-2"><input className="input" id="legal-name" required autoComplete="organization" value={form.legalName} onChange={event=>set("legalName",event.target.value)} placeholder="Ex.: Assessoria Contábil Moreira & Castro"/></Field>
           <Field label="Nome fantasia" htmlFor="trade-name" hint="Opcional"><input className="input" id="trade-name" value={form.tradeName} onChange={event=>set("tradeName",event.target.value)} placeholder="Como a empresa é conhecida"/></Field>
           <Field label="CNPJ" required htmlFor="tax-id" hint="Somente números ou CNPJ formatado"><input className="input" id="tax-id" required inputMode="numeric" autoComplete="off" value={form.taxId} onChange={event=>set("taxId",formatCnpj(event.target.value))} placeholder="00.000.000/0000-00"/></Field>
-          <Field label="&nbsp;" htmlFor="lookup-cnpj"><button className="button secondary" type="button" id="lookup-cnpj" disabled={lookingUp||digits(form.taxId).length!==14} onClick={lookupCnpj}>{lookingUp?"Buscando…":"Buscar CNPJ"}</button></Field>
+          <Field label="&nbsp;" htmlFor="lookup-cnpj"><button className="button secondary" type="button" id="lookup-cnpj" disabled={lookingUp||digits(form.taxId).length!==14} onClick={()=>lookupCnpj()}>{lookingUp?"Buscando…":"Buscar CNPJ"}</button></Field>
           <Field label="Código IBGE do município" required htmlFor="municipality-code" hint="7 dígitos"><input className="input" id="municipality-code" required inputMode="numeric" value={form.municipalityCode} onChange={event=>set("municipalityCode",digits(event.target.value).slice(0,7))} placeholder="Ex.: 3304557"/></Field>
           <Field label="Inscrição municipal" htmlFor="municipal-registration" hint="Preencha quando confirmada"><input className="input" id="municipal-registration" value={form.municipalRegistration} onChange={event=>set("municipalRegistration",event.target.value)} placeholder="Número da inscrição municipal"/></Field>
         </div>

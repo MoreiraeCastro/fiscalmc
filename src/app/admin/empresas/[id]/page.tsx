@@ -25,10 +25,10 @@ type CompanyTab = (typeof tabs)[number][0];
 const readinessTabs: Record<ReadinessItemKey, CompanyTab> = { registration: "overview", fiscal: "fiscal", services: "services", certificate: "certificate", clientAccess: "users" };
 const readinessLabels: Record<ReadinessItemKey, string> = { registration: "Cadastro", fiscal: "Fiscal", services: "Serviços", certificate: "Certificado", clientAccess: "Acesso" };
 
-export default async function CompanyPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; service?: string }> }) {
+export default async function CompanyPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; service?: string; certificado?: string }> }) {
   let officeSession;
   try { officeSession = await requireOfficeSession(); } catch { redirect("/app?notice=office"); }
-  const [{ id }, { tab: requested, service: selectedServiceId }] = await Promise.all([params, searchParams]);
+  const [{ id }, { tab: requested, service: selectedServiceId, certificado }] = await Promise.all([params, searchParams]);
   if (requested === "issue") redirect(`/contribuinte/usar/${id}?voltar=${encodeURIComponent("/contribuinte/nova")}`);
   const tab: CompanyTab = tabs.some(([key]) => key === requested) ? requested as CompanyTab : "overview";
   const isOverview = tab === "overview";
@@ -104,6 +104,7 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
     {tab === "issue" ? <section className="v2-issue-admin"><EmissionPreflight organizationId={company.id} canRun={canRunEmissionPreflight} services={issueServices} /><IssueForm customers={issueCustomers} services={issueServices} issuanceOrganizationId={company.id} catalogEnabled requiresProductionConfirmation={process.env.NFSE_ENV?.toLowerCase() === "production"} /></section> : null}
     {tab === "services" ? <ServiceManager organizationId={company.id} municipalityCode={company.municipality_code} initialServices={serviceDtos} catalogAvailable={Boolean(catalogResult.count)} initialSelectedServiceId={selectedServiceId ?? null} /> : null}
     {tab === "fiscal" ? <FiscalConfigurationForm organizationId={company.id} initialConfiguration={fiscalReadiness} /> : null}
+    {tab === "certificate" && certificado === "falhou" ? <div className="alert error" role="alert">A empresa foi cadastrada, mas o certificado A1 não foi gravado. Envie o arquivo e a senha de novo abaixo.</div> : null}
     {tab === "certificate" ? canReadCertificate ? <CertificateManager organizationId={company.id} organizationTaxId={company.tax_id} initialCertificate={certificateResult.data} canWrite={canManageCertificate} /> : <Notice title="Certificado" text="Seu perfil não pode consultar certificados." /> : null}
     {tab === "users" ? canReadClientAccess && clientAccessResult ? <ClientAccessManager organizationId={company.id} organizationTaxId={company.tax_id} initial={clientAccessResult} canWrite={canManageClientAccess} /> : <Notice title="Acessos" text="Seu perfil não pode consultar acessos de clientes." /> : null}
     {tab === "invoices" ? <Notice title="Notas fiscais" text="Consulte as emissões reais pela área de notas." action={<Link className="button secondary" href="/admin/notas">Abrir notas</Link>} /> : null}

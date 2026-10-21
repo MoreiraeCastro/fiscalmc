@@ -1,6 +1,6 @@
 import "server-only";
 import type { FiscalDocumentDomain } from "../types";
-import type { DpsFiscalConfiguration,DpsIbsCbs,DpsPerson,DpsSubstitution } from "../dps/model";
+import type { DpsComplement,DpsForeignTrade,DpsFederalTaxes,DpsFiscalConfiguration,DpsIbsCbs,DpsPerson,DpsSubstitution,DpsValues } from "../dps/model";
 import { mapToDpsModel } from "../dps/model";
 import { assertDpsReadiness } from "../dps/readiness";
 import { buildDpsXml } from "../dps/xml";
@@ -13,23 +13,31 @@ import { SafeFiscalError } from "../errors";
 import type { NFSeEnvironment } from "../types";
 
 type OrganizationInput={legalName:string;taxId:string;municipalRegistration:string;municipalityCode:string;postalCode:string;street:string;addressNumber:string;addressComplement?:string|null;neighborhood:string;state:string;email?:string|null;phone?:string|null};
-type CustomerInput={personType:string;taxId?:string|null;legalName:string;municipalRegistration?:string|null;postalCode?:string|null;street?:string|null;addressNumber?:string|null;addressComplement?:string|null;neighborhood?:string|null;municipalityCode?:string|null;state?:string|null;countryCode:string;email?:string|null;phone?:string|null};
+type CustomerInput={personType:string;taxId?:string|null;legalName:string;municipalRegistration?:string|null;postalCode?:string|null;street?:string|null;addressNumber?:string|null;addressComplement?:string|null;neighborhood?:string|null;municipalityCode?:string|null;state?:string|null;countryCode:string;email?:string|null;phone?:string|null;foreignTaxId?:string|null;noForeignTaxIdReason?:string|null;city?:string|null;foreignPostalCode?:string|null};
 export type RestrictedDpsPreparationStage="PREPARE_DPS"|"BUILD_DOCUMENT"|"UNSIGNED_XSD"|"XMLDSIG"|"SIGNATURE_VERIFICATION"|"SIGNED_XSD"|"GZIP_BASE64";
 
+/** Tomador no exterior: NIF ou o motivo de não ter (1 dispensado, 2 não exigido) e, se houver, o endereço no exterior (endExt). */
+function foreignCustomerPerson(customer:CustomerInput):DpsPerson{
+  const reason=customer.noForeignTaxIdReason==="1"||customer.noForeignTaxIdReason==="2"?customer.noForeignTaxIdReason:undefined;
+  if(!customer.foreignTaxId&&!reason||!/^[A-Z]{2}$/.test(customer.countryCode)||customer.countryCode==="BR")throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","O cadastro fiscal do tomador estrangeiro precisa ser revisado.");
+  const hasAddress=Boolean(customer.street||customer.addressNumber||customer.neighborhood||customer.city||customer.foreignPostalCode);
+  return{name:customer.legalName,...(customer.foreignTaxId?{foreignTaxId:customer.foreignTaxId}:{noForeignTaxIdReason:reason}),...(customer.email?{email:customer.email}:{}),...(hasAddress?{address:{street:customer.street??"",number:customer.addressNumber??"",...(customer.addressComplement?{complement:customer.addressComplement}:{}),neighborhood:customer.neighborhood??"",city:customer.city??"",postalAddressCode:customer.foreignPostalCode??"",stateOrProvince:customer.state??"",countryCode:customer.countryCode}}:{})};
+}
+
 function customerPerson(customer:CustomerInput):DpsPerson{
-  if(customer.personType==="FOREIGN")throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","O cadastro fiscal do tomador estrangeiro precisa ser revisado.");
+  if(customer.personType==="FOREIGN")return foreignCustomerPerson(customer);
   const hasAddress=Boolean(customer.street||customer.addressNumber||customer.neighborhood||customer.postalCode||customer.municipalityCode);
   return{name:customer.legalName,...(customer.taxId?{taxId:customer.taxId}:{}),...(customer.municipalRegistration?{municipalRegistration:customer.municipalRegistration}:{}),...(customer.email?{email:customer.email}:{}),...(customer.phone?{phone:customer.phone}:{}),...(hasAddress?{address:{street:customer.street??"",number:customer.addressNumber??"",...(customer.addressComplement?{complement:customer.addressComplement}:{}),neighborhood:customer.neighborhood??"",postalCode:customer.postalCode??"",municipalityCode:customer.municipalityCode??"",stateOrProvince:customer.state??"",countryCode:customer.countryCode}}:{})};
 }
 
-export async function prepareRestrictedDps(input:{organizationId:string;document:FiscalDocumentDomain;organization:OrganizationInput;customer?:CustomerInput;service:{nationalTaxCode:string;dpsMunicipalTaxCode:string;nbsCode?:string|null;locationMunicipalityCode:string};fiscal:DpsFiscalConfiguration;environment?:NFSeEnvironment;issuerMunicipalRegistrationEmission?:"SEND"|"OMIT";substitution?:DpsSubstitution;ibsCbs?:DpsIbsCbs;onStage?:(stage:RestrictedDpsPreparationStage)=>void}){
+export async function prepareRestrictedDps(input:{organizationId:string;document:FiscalDocumentDomain;organization:OrganizationInput;customer?:CustomerInput;service:{nationalTaxCode:string;dpsMunicipalTaxCode:string;nbsCode?:string|null;locationMunicipalityCode:string};fiscal:DpsFiscalConfiguration;environment?:NFSeEnvironment;issuerMunicipalRegistrationEmission?:"SEND"|"OMIT";substitution?:DpsSubstitution;ibsCbs?:DpsIbsCbs;intermediary?:DpsPerson;complement?:DpsComplement;foreignTrade?:DpsForeignTrade;values?:DpsValues;federal?:DpsFederalTaxes;onStage?:(stage:RestrictedDpsPreparationStage)=>void}){
   input.onStage?.("PREPARE_DPS");
   const certificateProvider=new OrganizationCertificateProvider();
   const issuer:DpsPerson={taxId:input.organization.taxId,name:input.organization.legalName,municipalRegistration:input.organization.municipalRegistration,emitName:false,emitAddress:false,...(input.issuerMunicipalRegistrationEmission==="OMIT"?{emitMunicipalRegistration:false}:{}),address:{street:input.organization.street,number:input.organization.addressNumber,...(input.organization.addressComplement?{complement:input.organization.addressComplement}:{}),neighborhood:input.organization.neighborhood,postalCode:input.organization.postalCode,municipalityCode:input.organization.municipalityCode,stateOrProvince:input.organization.state,countryCode:"BR"},...(input.organization.email?{email:input.organization.email}:{}),...(input.organization.phone?{phone:input.organization.phone}:{})};
   const customer=input.customer?customerPerson(input.customer):undefined;
   await assertDpsReadiness({organization:{legalName:input.organization.legalName,taxId:input.organization.taxId,municipalRegistration:input.organization.municipalRegistration,municipalityCode:input.organization.municipalityCode,address:{...issuer.address!,stateOrProvince:input.organization.state}},service:{nationalTaxCode:input.service.nationalTaxCode,municipalTaxCode:input.service.dpsMunicipalTaxCode,locationMunicipalityCode:input.service.locationMunicipalityCode},customer,fiscal:input.fiscal,certificateProvider,organizationId:input.organizationId});
   input.onStage?.("BUILD_DOCUMENT");
-  const model=mapToDpsModel(input.document,{issuer,customer,serviceLocation:{municipalityCode:input.service.locationMunicipalityCode},dpsMunicipalTaxCode:input.service.dpsMunicipalTaxCode||undefined,nbsCode:input.service.nbsCode??undefined,fiscal:input.fiscal,emittedAt:formatDpsDateTimeSaoPaulo(new Date()),applicationVersion:"FISCALMC_0.1",environment:input.environment==="PRODUCTION"?"1":"2",...(input.substitution?{substitution:input.substitution}:{}),...(input.ibsCbs?{ibsCbs:input.ibsCbs}:{}),layout:input.environment==="PRODUCTION"?"PUBLISHED":"RTC_2026_10"});
+  const model=mapToDpsModel(input.document,{issuer,customer,serviceLocation:{municipalityCode:input.service.locationMunicipalityCode},dpsMunicipalTaxCode:input.service.dpsMunicipalTaxCode||undefined,nbsCode:input.service.nbsCode??undefined,fiscal:input.fiscal,emittedAt:formatDpsDateTimeSaoPaulo(new Date()),applicationVersion:"FISCALMC_0.1",environment:input.environment==="PRODUCTION"?"1":"2",...(input.substitution?{substitution:input.substitution}:{}),...(input.ibsCbs?{ibsCbs:input.ibsCbs}:{}),...(input.intermediary?{intermediary:input.intermediary}:{}),...(input.complement?{complement:input.complement}:{}),...(input.foreignTrade?{foreignTrade:input.foreignTrade}:{}),...(input.values?{values:input.values}:{}),...(input.federal?{federal:input.federal}:{}),layout:input.environment==="PRODUCTION"?"PUBLISHED":"RTC_2026_10"});
   const unsignedXml=buildDpsXml(model);
   input.onStage?.("UNSIGNED_XSD");
   const unsignedValidation=await validateDpsXml(unsignedXml,input.environment);

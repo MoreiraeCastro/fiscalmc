@@ -28,7 +28,8 @@ function centavos(valor: string | null) {
   return sinal * (Math.abs(Number(inteiro)) * 100 + Number(decimal.padEnd(2, "0")));
 }
 
-export type EnderecoOficial = { logradouro: string | null; numero: string | null; complemento: string | null; bairro: string | null; municipio: string | null; uf: string | null; cep: string | null };
+/** No exterior: municipio = cidade, uf = estado/província, cep = código postal e pais = ISO. */
+export type EnderecoOficial = { logradouro: string | null; numero: string | null; complemento: string | null; bairro: string | null; municipio: string | null; uf: string | null; cep: string | null; pais?: string | null };
 export type PessoaOficial = { documento: string | null; nome: string | null; inscricaoMunicipal: string | null; telefone: string | null; email: string | null; endereco: EnderecoOficial | null };
 
 export type NfseOficial = {
@@ -45,6 +46,12 @@ export type NfseOficial = {
   situacao: string | null;
   emitente: PessoaOficial;
   tomador: PessoaOficial | null;
+  intermediario: PessoaOficial | null;
+  /** Grupo infoCompl da DPS. */
+  complemento: { docTecnico: string | null; docReferencia: string | null; pedido: string | null; informacoes: string | null } | null;
+  descontos: { incondicionado: number | null; condicionado: number | null };
+  /** Grupo tribFed da DPS (PIS/COFINS e retenções federais). */
+  federal: { cst: string | null; basePisCofins: number | null; pis: number | null; cofins: number | null; tipoRetencao: string | null; irrf: number | null; cs: number | null; cp: number | null } | null;
   dps: { emitidaEm: string | null; serie: string | null; numero: string | null; competencia: string | null; versao: string | null };
   regime: { opcaoSimples: string | null; apuracaoSimples: string | null; regimeEspecial: string | null };
   servico: { codigoNacional: string | null; codigoMunicipal: string | null; descricao: string | null; nbs: string | null; localPrestacao: string | null };
@@ -61,6 +68,8 @@ function endereco(no: unknown): EnderecoOficial | null {
   if (ender) return { logradouro: texto(ender, "xLgr"), numero: texto(ender, "nro"), complemento: texto(ender, "xCpl"), bairro: texto(ender, "xBairro"), municipio: texto(ender, "cMun"), uf: texto(ender, "UF"), cep: texto(ender, "CEP") };
   const end = filho(no, "end");
   if (!end) return null;
+  const ext = filho(end, "endExt");
+  if (ext) return { logradouro: texto(end, "xLgr"), numero: texto(end, "nro"), complemento: texto(end, "xCpl"), bairro: texto(end, "xBairro"), municipio: texto(ext, "xCidade"), uf: texto(ext, "xEstProvReg"), cep: texto(ext, "cEndPost"), pais: texto(ext, "cPais") };
   return { logradouro: texto(end, "xLgr"), numero: texto(end, "nro"), complemento: texto(end, "xCpl"), bairro: texto(end, "xBairro"), municipio: texto(end, "endNac", "cMun"), uf: null, cep: texto(end, "endNac", "CEP") };
 }
 
@@ -82,6 +91,10 @@ export function lerNfseOficial(xml: string): NfseOficial | null {
   if (!inf) return null;
   const dps = filho(inf, "DPS", "infDPS");
   const toma = filho(dps, "toma");
+  const interm = filho(dps, "interm");
+  const compl = filho(dps, "serv", "infoCompl");
+  const tribFed = filho(dps, "valores", "trib", "tribFed");
+  const pisCofins = filho(tribFed, "piscofins");
   const cServ = filho(dps, "serv", "cServ");
   const tribMun = filho(dps, "valores", "trib", "tribMun");
   const regTrib = filho(dps, "prest", "regTrib");
@@ -91,6 +104,13 @@ export function lerNfseOficial(xml: string): NfseOficial | null {
     versaoAplicacao: texto(inf, "verAplic"), ambienteGerador: texto(inf, "ambGer"), situacao: texto(inf, "cStat"),
     emitente: pessoa(filho(inf, "emit")),
     tomador: toma ? pessoa(toma) : null,
+    intermediario: interm ? pessoa(interm) : null,
+    complemento: compl ? { docTecnico: texto(compl, "idDocTec"), docReferencia: texto(compl, "docRef"), pedido: texto(compl, "xPed"), informacoes: texto(compl, "xInfComp") } : null,
+    descontos: { incondicionado: centavos(texto(dps, "valores", "vDescCondIncond", "vDescIncond")), condicionado: centavos(texto(dps, "valores", "vDescCondIncond", "vDescCond")) },
+    federal: tribFed ? {
+      cst: texto(pisCofins, "CST"), basePisCofins: centavos(texto(pisCofins, "vBCPisCofins")), pis: centavos(texto(pisCofins, "vPis")), cofins: centavos(texto(pisCofins, "vCofins")), tipoRetencao: texto(pisCofins, "tpRetPisCofins"),
+      irrf: centavos(texto(tribFed, "vRetIRRF")), cs: centavos(texto(tribFed, "vRetCSLL")), cp: centavos(texto(tribFed, "vRetCP")),
+    } : null,
     dps: { emitidaEm: texto(dps, "dhEmi"), serie: texto(dps, "serie"), numero: texto(dps, "nDPS"), competencia: texto(dps, "dCompet"), versao: texto(filho(inf, "DPS"), "@_versao") },
     regime: { opcaoSimples: texto(regTrib, "opSimpNac"), apuracaoSimples: texto(regTrib, "regApTribSN"), regimeEspecial: texto(regTrib, "regEspTrib") },
     servico: { codigoNacional: texto(cServ, "cTribNac"), codigoMunicipal: texto(cServ, "cTribMun"), descricao: texto(cServ, "xDescServ"), nbs: texto(cServ, "cNBS"), localPrestacao: texto(dps, "serv", "locPrest", "cLocPrestacao") },

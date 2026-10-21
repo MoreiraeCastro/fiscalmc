@@ -45,7 +45,7 @@ export async function POST(request:Request){
     const office=await requireOfficeSession();
     const data=organizationInput.parse(await request.json());
     const db=createAdminClient();
-    const {data:organization,error}=await db.from("organizations").insert({...toOrganizationPayload(data),status:"ONBOARDING",emission_blocked:true}).select("id").single();
+    const {data:organization,error}=await db.from("organizations").insert({...toOrganizationPayload(data),status:"ACTIVE",emission_blocked:false}).select("id").single();
     if(error)throw error;
     await linkPrimaryActivity(db,organization.id,data.cnaeFiscalCode,office.userId);
     return NextResponse.json({organization},{status:201});

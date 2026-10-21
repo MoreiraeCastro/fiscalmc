@@ -6,7 +6,8 @@ import { SituacaoNota } from "@/components/contribuinte/tabela-notas";
 import { BotaoImprimir, BotaoSubstituir, CancelarNfse, ConsultarCancelamento, SolicitarCancelamento } from "@/components/contribuinte/acoes-nota";
 import { apiUrl } from "@/lib/base-path";
 import { exigirEmpresa, rotasLegadas } from "@/lib/contribuinte/contexto";
-import { MOTIVOS_CANCELAMENTO, MOTIVOS_SUBSTITUICAO } from "@/lib/contribuinte/dps";
+import { CST_PIS_COFINS, MOTIVOS_CANCELAMENTO, MOTIVOS_SUBSTITUICAO, RETENCAO_PIS_COFINS } from "@/lib/contribuinte/dps";
+import paises from "@/lib/contribuinte/paises.json";
 import { RETENCAO_ISSQN, TRIBUTACAO_ISSQN } from "@/lib/contribuinte/emissao";
 import { formatarCompetencia, formatarData, formatarDataHora, formatarDocumento, formatarValor } from "@/lib/contribuinte/formato";
 import { nomeMunicipio } from "@/lib/contribuinte/municipios";
@@ -22,8 +23,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ABAS = [["nfse", "NFS-e"], ["pessoas", "Pessoas"], ["servico", "Serviço"], ["eventos", "Eventos"]] as const;
 const OPCAO_SIMPLES: Record<string, string> = { "1": "Não Optante", "2": "Optante - MEI", "3": "Optante - ME/EPP" };
 
+const NOME_PAIS = new Map(paises.map((item) => [item.codigo, item.nome]));
+
 function enderecoTexto(endereco: EnderecoOficial | null | undefined) {
   if (!endereco) return "—";
+  if (endereco.pais) return [[endereco.logradouro, endereco.numero, endereco.complemento].filter(Boolean).join(", "), endereco.bairro, endereco.municipio, endereco.uf, endereco.cep ? `Código postal ${endereco.cep}` : null, NOME_PAIS.get(endereco.pais) ?? endereco.pais].filter(Boolean).join(" · ") || "—";
   return [[endereco.logradouro, endereco.numero, endereco.complemento].filter(Boolean).join(", "), endereco.bairro, endereco.municipio ? nomeMunicipio(endereco.municipio) : null, endereco.cep ? `CEP ${endereco.cep}` : null].filter(Boolean).join(" · ") || "—";
 }
 function pct(valor: string | null | undefined) {
@@ -134,6 +138,8 @@ export default async function VisualizarNfse({ params, searchParams }: { params:
           <div><dt>Município de incidência</dt><dd>{oficial?.localIncidencia ?? "—"}</dd></div>
           <div><dt>Retenção do ISSQN</dt><dd>{oficial?.tributacao.retencao ? RETENCAO_ISSQN[oficial.tributacao.retencao] : "—"}</dd></div>
           <div><dt>Valor do serviço</dt><dd>{rs(oficial?.valores.servico ?? nota.amount_cents)}</dd></div>
+          {oficial?.descontos.incondicionado ? <div><dt>Desconto incondicionado</dt><dd>{rs(oficial.descontos.incondicionado)}</dd></div> : null}
+          {oficial?.descontos.condicionado ? <div><dt>Desconto condicionado</dt><dd>{rs(oficial.descontos.condicionado)}</dd></div> : null}
           <div><dt>Base de cálculo</dt><dd>{rs(oficial?.valores.baseCalculo)}</dd></div>
           <div><dt>Alíquota aplicada</dt><dd>{pct(oficial?.valores.aliquotaAplicada)}</dd></div>
           <div><dt>ISSQN</dt><dd>{rs(oficial?.valores.issqn)}</dd></div>
@@ -141,6 +147,16 @@ export default async function VisualizarNfse({ params, searchParams }: { params:
           <div><dt>Valor líquido</dt><dd><strong>{rs(oficial?.valores.liquido)}</strong></dd></div>
         </dl>
       </Cartao>
+      {oficial?.federal ? <Cartao titulo="Tributação federal">
+        <dl className="pc-resumo">
+          {oficial.federal.cst ? <div><dt>Situação tributária do PIS/COFINS</dt><dd>{oficial.federal.cst} - {CST_PIS_COFINS[oficial.federal.cst as keyof typeof CST_PIS_COFINS] ?? ""}</dd></div> : null}
+          {oficial.federal.cst ? <div><dt>Base / PIS / COFINS</dt><dd>{rs(oficial.federal.basePisCofins)} / {rs(oficial.federal.pis)} / {rs(oficial.federal.cofins)}</dd></div> : null}
+          {oficial.federal.tipoRetencao ? <div><dt>Tipo de retenção</dt><dd>{RETENCAO_PIS_COFINS[oficial.federal.tipoRetencao as keyof typeof RETENCAO_PIS_COFINS] ?? oficial.federal.tipoRetencao}</dd></div> : null}
+          <div><dt>IRRF retido</dt><dd>{rs(oficial.federal.irrf ?? 0)}</dd></div>
+          <div><dt>Contribuições sociais retidas</dt><dd>{rs(oficial.federal.cs ?? 0)}</dd></div>
+          <div><dt>Contribuição previdenciária retida</dt><dd>{rs(oficial.federal.cp ?? 0)}</dd></div>
+        </dl>
+      </Cartao> : null}
       {oficial?.ibsCbs ? <Cartao titulo="IBS/CBS">
         <dl className="pc-resumo">
           <div><dt>Situação / classificação</dt><dd>{oficial.ibsCbs.cst ?? "—"} / {oficial.ibsCbs.classificacao ?? "—"}</dd></div>
@@ -180,7 +196,11 @@ export default async function VisualizarNfse({ params, searchParams }: { params:
           <div><dt>Endereço</dt><dd>{oficial?.tomador ? enderecoTexto(oficial.tomador.endereco) : tomadorCadastro ? enderecoTexto({ logradouro: tomadorCadastro.street, numero: tomadorCadastro.address_number, complemento: tomadorCadastro.address_complement, bairro: tomadorCadastro.neighborhood, municipio: tomadorCadastro.municipality_code, uf: null, cep: tomadorCadastro.postal_code }) : "—"}</dd></div>
         </dl>
       </Cartao>
-      <Cartao titulo="Intermediário"><p className="pc-texto">Não informado.</p></Cartao>
+      <Cartao titulo="Intermediário">{oficial?.intermediario ? <dl className="pc-resumo">
+        <div><dt>CPF/CNPJ</dt><dd>{formatarDocumento(oficial.intermediario.documento) || "—"}</dd></div>
+        <div><dt>Nome/Razão social</dt><dd>{oficial.intermediario.nome ?? "—"}</dd></div>
+        {oficial.intermediario.email ? <div><dt>E-mail</dt><dd>{oficial.intermediario.email}</dd></div> : null}
+      </dl> : <p className="pc-texto">Não informado.</p>}</Cartao>
     </> : null}
 
     {aba === "servico" ? <Cartao titulo="Serviço prestado">
@@ -191,6 +211,10 @@ export default async function VisualizarNfse({ params, searchParams }: { params:
         <div><dt>Local da prestação</dt><dd>{oficial?.localPrestacao ?? nomeMunicipio(modelo?.service_location_municipality_code ?? empresa.municipio)}</dd></div>
         <div><dt>Competência</dt><dd>{formatarCompetencia(nota.service_date)}</dd></div>
         <div><dt>Descrição</dt><dd className="pre">{oficial?.servico.descricao ?? nota.description}</dd></div>
+        {oficial?.complemento?.docTecnico ? <div><dt>Documento de responsabilidade técnica</dt><dd>{oficial.complemento.docTecnico}</dd></div> : null}
+        {oficial?.complemento?.docReferencia ? <div><dt>Documento de referência</dt><dd>{oficial.complemento.docReferencia}</dd></div> : null}
+        {oficial?.complemento?.pedido ? <div><dt>Pedido/Ordem de Compra/OS/Projeto</dt><dd>{oficial.complemento.pedido}</dd></div> : null}
+        {oficial?.complemento?.informacoes ? <div><dt>Informações complementares</dt><dd className="pre">{oficial.complemento.informacoes}</dd></div> : null}
       </dl>
     </Cartao> : null}
 

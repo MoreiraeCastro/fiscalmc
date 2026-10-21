@@ -29,6 +29,11 @@ function assertDomesticAddress(address: NonNullable<DpsPerson["address"]> | unde
   return address;
 }
 
+/** Endereço no exterior (endExt): país ISO, código postal, cidade e estado/província, além de logradouro, número e bairro. */
+function assertForeignAddress(address: NonNullable<DpsPerson["address"]>, scope: string) {
+  if (!address.street || !address.number || !address.neighborhood || !address.city || !address.postalAddressCode || !address.stateOrProvince || !/^[A-Z]{2}$/.test(address.countryCode ?? "")) incomplete(scope);
+}
+
 /**
  * Validates the data boundary before DpsModel/XML construction. It deliberately
  * does not fill any fiscal or registration value: missing data blocks the flow.
@@ -53,7 +58,8 @@ export async function assertDpsReadiness(input: {
   if (customer) {
     const domesticId = customer.taxId?.replace(/\D/g, "");
     if (!customer.name || !((domesticId?.length === 11 || domesticId?.length === 14) || customer.foreignTaxId || customer.noForeignTaxIdReason)) incomplete("tomador");
-    if (customer.address) assertDomesticAddress(customer.address, "tomador");
+    if (customer.address && customer.address.countryCode && customer.address.countryCode !== "BR") assertForeignAddress(customer.address, "tomador");
+    else if (customer.address) assertDomesticAddress(customer.address, "tomador");
   }
 
   if (!fiscal.regime || !fiscal.iss || !fiscal.totalTaxes || fiscal.ibsCbsRequired) incomplete("fiscal");

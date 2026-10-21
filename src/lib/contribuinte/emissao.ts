@@ -70,17 +70,20 @@ export async function servicosProntos(empresaId: string): Promise<ServicoPronto[
   });
 }
 
-export type TomadorSalvo = { id: string; documento: string | null; nome: string; email: string | null; telefone: string | null; municipio: string | null };
+/** exterior: tomador no exterior (documento = NIF, pais = ISO do país). */
+export type TomadorSalvo = { id: string; documento: string | null; nome: string; email: string | null; telefone: string | null; municipio: string | null; exterior?: { pais: string } };
 
 /** "Últimos Tomadores": quem já está cadastrado para a empresa, do mais recente para o mais antigo. */
 export async function tomadoresSalvos(empresaId: string): Promise<TomadorSalvo[]> {
-  const { data } = await createAdminClient().from("customers").select("id,tax_id,legal_name,email,phone,municipality_code")
-    .eq("organization_id", empresaId).neq("person_type", "FOREIGN").order("updated_at", { ascending: false }).limit(300);
-  return (data ?? []).map((item) => ({ id: item.id, documento: item.tax_id, nome: item.legal_name, email: item.email, telefone: item.phone, municipio: item.municipality_code }));
+  const { data } = await createAdminClient().from("customers").select("id,person_type,tax_id,foreign_tax_id,legal_name,email,phone,municipality_code,country_code")
+    .eq("organization_id", empresaId).order("updated_at", { ascending: false }).limit(300);
+  return (data ?? []).map((item) => item.person_type === "FOREIGN"
+    ? { id: item.id, documento: item.foreign_tax_id, nome: item.legal_name, email: item.email, telefone: item.phone, municipio: null, exterior: { pais: item.country_code } }
+    : { id: item.id, documento: item.tax_id, nome: item.legal_name, email: item.email, telefone: item.phone, municipio: item.municipality_code });
 }
 
 export async function tomadorPorId(empresaId: string, id: string) {
-  const { data } = await createAdminClient().from("customers").select("id,tax_id,legal_name,email,phone,municipality_code,postal_code,street,address_number,address_complement,neighborhood,state")
+  const { data } = await createAdminClient().from("customers").select("id,person_type,tax_id,foreign_tax_id,no_foreign_tax_id_reason,legal_name,email,phone,municipality_code,postal_code,street,address_number,address_complement,neighborhood,state,city,foreign_postal_code,country_code")
     .eq("organization_id", empresaId).eq("id", id).maybeSingle();
   return data;
 }

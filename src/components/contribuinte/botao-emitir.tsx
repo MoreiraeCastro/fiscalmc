@@ -6,6 +6,7 @@ import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { registrarResultadoAction } from "@/app/contribuinte/dps/actions";
 import { apiUrl } from "@/lib/base-path";
+import type { ExtrasDps } from "@/lib/contribuinte/extras-dps";
 
 export type PedidoEmissao = {
   organizationId?: string;
@@ -18,6 +19,7 @@ export type PedidoEmissao = {
   manualIssRateSourceNote?: string;
   substitution?: { invoiceId: string; reasonCode: string; reason?: string };
   ibsCbs?: { finalConsumer: string; operationIndicator: string; destinationIndicator: "0"; cst: string; classification: string };
+  extras?: ExtrasDps;
 };
 
 /**

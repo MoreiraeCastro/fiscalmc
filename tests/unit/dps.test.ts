@@ -135,5 +135,33 @@ describe("DPS v1.01",()=>{
     expect(encodeDpsForSefin(xml)).toMatch(/^[A-Za-z0-9+/=]+$/);
     await expect(validateDpsXml(xml)).resolves.toMatchObject({valid:true,errors:[]});
   });
+  it("serializa intermediário, tomador no exterior, infoCompl, descontos e tribFed na ordem do XSD (produção e restrita)",async()=>{
+    const model=modelWithIssuerMunicipalRegistration(false);
+    model.customer={name:"ACME INC",foreignTaxId:"98-7654321",address:{street:"Main Street",number:"100",neighborhood:"Downtown",city:"New York",postalAddressCode:"10001",stateOrProvince:"NY",countryCode:"US"}};
+    model.intermediary={taxId:"00000000000191",name:"BANCO DO BRASIL SA"};
+    model.service.complement={technicalDocument:"ART123",referenceDocument:"Contrato 15/2026",purchaseOrder:"OS-77",text:"Honorários ref. outubro/2026"};
+    model.values={receivedByIntermediaryCents:500,unconditionalDiscountCents:1000,conditionalDiscountCents:200};
+    model.federal={pisCofins:{cst:"01",baseCents:9000,pisBasisPoints:65,cofinsBasisPoints:300,pisCents:59,cofinsCents:270,retention:"3"},socialSecurityCents:1100,irrfCents:135,csllCents:90};
+    const xml=buildDpsXml({...model,layout:"PUBLISHED"});
+    expect(xml).toContain("<toma><NIF>98-7654321</NIF><xNome>ACME INC</xNome><end><endExt><cPais>US</cPais><cEndPost>10001</cEndPost><xCidade>New York</xCidade><xEstProvReg>NY</xEstProvReg></endExt>");
+    expect(xml).toContain("</toma><interm><CNPJ>00000000000191</CNPJ><xNome>BANCO DO BRASIL SA</xNome></interm><serv>");
+    expect(xml).toContain("<infoCompl><idDocTec>ART123</idDocTec><docRef>Contrato 15/2026</docRef><xPed>OS-77</xPed><xInfComp>Honorários ref. outubro/2026</xInfComp></infoCompl></serv>");
+    expect(xml).toContain("<vServPrest><vReceb>5.00</vReceb><vServ>100.00</vServ></vServPrest><vDescCondIncond><vDescIncond>10.00</vDescIncond><vDescCond>2.00</vDescCond></vDescCondIncond>");
+    expect(xml).toContain("<tribFed><piscofins><CST>01</CST><vBCPisCofins>90.00</vBCPisCofins><pAliqPis>0.65</pAliqPis><pAliqCofins>3.00</pAliqCofins><vPis>0.59</vPis><vCofins>2.70</vCofins><tpRetPisCofins>3</tpRetPisCofins></piscofins><vRetCP>11.00</vRetCP><vRetIRRF>1.35</vRetIRRF><vRetCSLL>0.90</vRetCSLL></tribFed><totTrib>");
+    await expect(validateDpsXml(xml,"PRODUCTION")).resolves.toMatchObject({valid:true,errors:[]});
+    await expect(validateDpsXml(buildDpsXml({...model,layout:"RTC_2026_10"}))).resolves.toMatchObject({valid:true,errors:[]});
+  });
+  it("tomador no exterior sem NIF sai com cNaoNIF e passa na prontidão",async()=>{
+    const model=modelWithIssuerMunicipalRegistration(false);
+    model.customer={name:"ACME GMBH",noForeignTaxIdReason:"2"};
+    expect(buildDpsXml(model)).toContain("<toma><cNaoNIF>2</cNaoNIF><xNome>ACME GMBH</xNome></toma>");
+    await expect(assertDpsReadiness({organization:{legalName:"Prestador",taxId:"12345678000195",municipalRegistration:"123",municipalityCode:"3304557",address:{street:"Rua",number:"1",neighborhood:"Centro",postalCode:"20000000",municipalityCode:"3304557",stateOrProvince:"RJ"}},service:{nationalTaxCode:"171901",municipalTaxCode:"001",locationMunicipalityCode:"3304557"},customer:{name:"ACME",foreignTaxId:"X1",address:{street:"Main",number:"1",neighborhood:"Down",city:"NY",postalAddressCode:"10001",stateOrProvince:"NY",countryCode:"US"}},fiscal:{regime:{simpleNational:"1",special:"0"},iss:{taxation:"1",withholding:"1",rateSource:"PARAMETRIZED_BY_NATIONAL"},totalTaxes:{indicator:"0"}},verifyCertificate:false})).resolves.toBeTruthy();
+  });
+  it("recusa descontos que zeram o valor do serviço",()=>{
+    const document={organizationId:"org",issuer:{taxId:"12345678000195",municipalRegistration:"123",municipalityCode:"3304557"},customer:{name:"Tomador"},service:{nationalTaxCode:"171901",description:"Contabilidade"},taxConfiguration:{regime:"SIMPLES_NACIONAL" as const,taxationType:"MUNICIPAL" as const,iss:{withheld:false,source:"ACCEPTED_PRODUCTION_DPS" as const},ibsCbs:{customerFieldsEnabled:false}},amountCents:1000,serviceDate:"2026-09-02",dps:{series:"00001",number:1n,identifier:"DPS"}};
+    const input={issuer:{taxId:"12345678000195",name:"Prestador"},serviceLocation:{municipalityCode:"3304557"},fiscal:{regime:{simpleNational:"3" as const,special:"0" as const},iss:{taxation:"1" as const,withholding:"1" as const,rateSource:"PARAMETRIZED_BY_NATIONAL" as const},totalTaxes:{indicator:"0" as const}},emittedAt:"2026-09-02T00:00:00-03:00",applicationVersion:"test",environment:"2" as const};
+    expect(()=>mapToDpsModel(document,{...input,values:{unconditionalDiscountCents:600,conditionalDiscountCents:400}})).toThrow();
+    expect(mapToDpsModel(document,{...input,values:{unconditionalDiscountCents:999}}).values).toEqual({unconditionalDiscountCents:999});
+  });
   it("bloqueia prontidão DPS sem o código municipal de três dígitos",async()=>await expect(assertDpsReadiness({organization:{legalName:"Prestador",taxId:"12345678000195",municipalRegistration:"123",municipalityCode:"3304557",address:{street:"Rua",number:"1",neighborhood:"Centro",postalCode:"20000000",municipalityCode:"3304557",stateOrProvince:"RJ"}},service:{nationalTaxCode:"070201",municipalTaxCode:"07.02.01.001",locationMunicipalityCode:"3304557"},customer:{name:"Tomador",taxId:"52998224725"},fiscal:{regime:{simpleNational:"1",special:"0"},iss:{taxation:"1",withholding:"1",rateSource:"EMITTER_PROVIDED",rateBasisPoints:500},totalTaxes:{indicator:"0"}},verifyCertificate:false})).rejects.toMatchObject({code:"FISCAL_CONFIGURATION_INCOMPLETE"}));
 });

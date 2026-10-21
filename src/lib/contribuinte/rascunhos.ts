@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { DadosRascunho, NumeroPasso } from "./dps";
+import { rascunhoDosExtras, type ExtrasDps } from "./extras-dps";
 
 export type Rascunho = { id: string; passo: NumeroPasso; dados: DadosRascunho; chave: string; notaId: string | null; atualizadoEm: string };
 
@@ -73,7 +74,7 @@ export async function registrarResultado(input: { empresaId: string; id: string;
  */
 export async function criarRascunhoDeSubstituicao(input: { empresaId: string; usuarioId: string; notaId: string }): Promise<string | null> {
   const db = createAdminClient();
-  const { data: nota } = await db.from("invoices").select("id,status,access_key,nfse_number,service_date,amount_cents,description,customer_id,service_template_id,customers(tax_id,legal_name)")
+  const { data: nota } = await db.from("invoices").select("id,status,access_key,nfse_number,service_date,amount_cents,description,customer_id,service_template_id,dps_extras,customers(person_type,tax_id,foreign_tax_id,legal_name)")
     .eq("organization_id", input.empresaId).eq("id", input.notaId).maybeSingle();
   if (!nota || nota.status !== "ISSUED" || !nota.access_key) return null;
   const { data: abertos } = await db.from("invoice_drafts").select("id,data").eq("organization_id", input.empresaId).is("invoice_id", null).order("updated_at", { ascending: false }).limit(200);
@@ -82,9 +83,12 @@ export async function criarRascunhoDeSubstituicao(input: { empresaId: string; us
   const tomador = Array.isArray(nota.customers) ? nota.customers[0] : nota.customers;
   const dados: DadosRascunho = {
     competencia: nota.service_date,
-    ...(nota.customer_id ? { tomador: { clienteId: nota.customer_id, documento: tomador?.tax_id ?? null, nome: tomador?.legal_name ?? "" } } : { semTomador: true }),
+    ...(nota.customer_id ? { tomador: tomador?.person_type === "FOREIGN"
+      ? { clienteId: nota.customer_id, documento: tomador.foreign_tax_id ?? null, nome: tomador.legal_name ?? "", exterior: true }
+      : { clienteId: nota.customer_id, documento: tomador?.tax_id ?? null, nome: tomador?.legal_name ?? "" } } : { semTomador: true }),
     servico: { modeloId: nota.service_template_id, descricao: nota.description },
-    valores: { valorCentavos: nota.amount_cents },
+    // Intermediário, informações complementares, comércio exterior, descontos e tributação federal da original.
+    ...rascunhoDosExtras(nota.dps_extras as ExtrasDps | null, nota.amount_cents),
     substituicao: { notaId: nota.id, chave: nota.access_key, numero: nota.nfse_number, competencia: nota.service_date, valorCentavos: nota.amount_cents },
   };
   const { data, error } = await db.from("invoice_drafts").insert({ organization_id: input.empresaId, step: 3, data: dados, created_by: input.usuarioId, updated_by: input.usuarioId }).select("id").single();

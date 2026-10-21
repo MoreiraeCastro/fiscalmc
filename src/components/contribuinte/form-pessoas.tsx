@@ -5,13 +5,17 @@ import { History, LoaderCircle, Search, X } from "lucide-react";
 import { consultarTomador, salvarPessoas, type EstadoPasso } from "@/app/contribuinte/dps/actions";
 import { formatarDocumento } from "@/lib/contribuinte/formato";
 import type { TomadorSalvo } from "@/lib/contribuinte/emissao";
+import type { IntermediarioRascunho } from "@/lib/contribuinte/dps";
+import paises from "@/lib/contribuinte/paises.json";
 import type { CnpjLookupCustomer } from "@/lib/nfse/cnpj-lookup";
 import { Cartao } from "./portal-shell";
 import { Campo, FaixaValidacao, Leitura, Rodape } from "./campos";
 
 export type EmitenteResumo = { razaoSocial: string; cnpj: string; municipio: string; inscricaoMunicipal: string | null; opcaoSimples: string; apuracaoSimples: string | null; email: string | null; telefone: string | null; endereco: string };
 
-type Inicial = { competencia: string; tomador: { clienteId: string; documento: string | null; nome: string } | null; semTomador: boolean; informarIbsCbs: boolean };
+type Inicial = { competencia: string; tomador: { clienteId: string; documento: string | null; nome: string; exterior?: boolean } | null; semTomador: boolean; informarIbsCbs: boolean; intermediario: IntermediarioRascunho | null };
+type Onde = "BRASIL" | "EXTERIOR" | "NAO_INFORMADO";
+const NOME_PAIS = new Map(paises.map((item) => [item.codigo, item.nome]));
 
 /** Máscara de CPF (até 11 dígitos) ou CNPJ enquanto digita. */
 function mascaraDocumento(texto: string) {
@@ -38,12 +42,21 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje, ib
   const [aviso, setAviso] = useState("");
   const [consultando, iniciarConsulta] = useTransition();
   const [historico, setHistorico] = useState(false);
-  const [semTomador, setSemTomador] = useState(inicial.semTomador);
+  const [onde, setOnde] = useState<Onde>(inicial.semTomador ? "NAO_INFORMADO" : inicial.tomador?.exterior ? "EXTERIOR" : "BRASIL");
+  const semTomador = onde === "NAO_INFORMADO";
+  const exterior = onde === "EXTERIOR";
+  // Tomador no exterior já salvo (do histórico ou do rascunho): mostra só o resumo.
+  const [exteriorSalvo, setExteriorSalvo] = useState<{ documento: string | null; nome: string; pais?: string } | null>(inicial.tomador?.exterior ? { documento: inicial.tomador.documento, nome: inicial.tomador.nome } : null);
   const erros = estado.erros;
   // Razão social que veio do cartão CNPJ fica travada (só muda trocando o CNPJ).
   const nomeDaReceita = !clienteId && Boolean(endereco?.legalName);
 
   function usarSalvo(item: TomadorSalvo) {
+    if (item.exterior) {
+      setOnde("EXTERIOR"); setClienteId(item.id); setExteriorSalvo({ documento: item.documento, nome: item.nome, pais: item.exterior.pais }); setHistorico(false);
+      return;
+    }
+    setOnde("BRASIL"); setExteriorSalvo(null);
     setClienteId(item.id); setDocumento(formatarDocumento(item.documento)); setNome(item.nome);
     setEmail(item.email ?? ""); setTelefone(item.telefone ?? ""); setEndereco(null); setAviso(""); setHistorico(false);
   }
@@ -105,13 +118,22 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje, ib
     <Cartao titulo="Tomador/Adquirente do serviço">
       <fieldset className="pc-opcoes">
         <legend>Onde está localizado o estabelecimento/domicílio?<span className="pc-obrigatorio"> *</span></legend>
-        <label><input type="radio" name="onde" value="BRASIL" checked={!semTomador} onChange={() => setSemTomador(false)} /> Brasil</label>
-        <label className="desativado" title="Ainda não disponível no nosso emissor"><input type="radio" disabled /> Exterior <small>em breve</small></label>
-        <label><input type="radio" name="onde" value="NAO_INFORMADO" checked={semTomador} onChange={() => setSemTomador(true)} /> Tomador/Adquirente não informado</label>
+        <label><input type="radio" name="onde" value="BRASIL" checked={onde === "BRASIL"} onChange={() => { setOnde("BRASIL"); if (exteriorSalvo) { setClienteId(""); setExteriorSalvo(null); } }} /> Brasil</label>
+        <label><input type="radio" name="onde" value="EXTERIOR" checked={exterior} onChange={() => { setOnde("EXTERIOR"); if (!exteriorSalvo) limpar(); }} /> Exterior</label>
+        <label><input type="radio" name="onde" value="NAO_INFORMADO" checked={semTomador} onChange={() => setOnde("NAO_INFORMADO")} /> Tomador/Adquirente não informado</label>
       </fieldset>
       <input type="hidden" name="clienteId" value={clienteId} />
       <input type="hidden" name="endereco" value={endereco ? JSON.stringify(endereco) : ""} />
-      {semTomador ? <p className="pc-nota">A NFS-e sai sem tomador. Use só quando não houver tomador identificado.</p> : <>
+      {semTomador ? <p className="pc-nota">A NFS-e sai sem tomador. Use só quando não houver tomador identificado.</p> : exterior ? <>
+        {exteriorSalvo && clienteId ? <div className="pc-grade">
+          <Leitura rotulo="NIF" valor={exteriorSalvo.documento ?? "Não informado"} largura="terco" />
+          <Leitura rotulo="Nome/Razão Social" valor={exteriorSalvo.nome} largura="meia" />
+          {exteriorSalvo.pais ? <Leitura rotulo="País" valor={NOME_PAIS.get(exteriorSalvo.pais) ?? exteriorSalvo.pais} largura="terco" /> : null}
+          <div className="pc-campo inteira"><button type="button" className="pc-link botao" onClick={() => { setClienteId(""); setExteriorSalvo(null); }}>Trocar tomador</button></div>
+        </div> : <TomadorExterior erros={erros} />}
+        <button type="button" className="pc-link botao" onClick={() => setHistorico(true)}><History size={15} aria-hidden /> Últimos Tomadores</button>
+        <p className="pc-nota">Tomador no exterior: no passo Serviço você informa os dados de comércio exterior, exigidos pela Receita.</p>
+      </> : <>
       <div className="pc-grade">
         <Campo rotulo="CPF/CNPJ" obrigatorio erro={erros.documento ?? erros.tomador} id="documento" largura="meia">
           <div className="pc-com-botoes">
@@ -144,9 +166,7 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje, ib
       </>}
     </Cartao>
 
-    <Cartao titulo="Intermediário do serviço">
-      <p className="pc-texto">Intermediário não informado. <span className="pc-mudo">(O nosso emissor ainda não envia intermediário.)</span></p>
-    </Cartao>
+    <Intermediario inicial={inicial.intermediario} erros={erros} />
 
     <Rodape><button className="pc-botao" type="submit" disabled={salvando}>{salvando ? "Salvando…" : "Avançar"}</button></Rodape>
 
@@ -167,9 +187,89 @@ function UltimosTomadores({ tomadores, onEscolher, onFechar }: { tomadores: Toma
       <input className="pc-input" autoFocus placeholder="Pesquisar por nome, CPF ou CNPJ" value={busca} onChange={(e) => setBusca(e.target.value)} />
       <div className="pc-janela-lista">
         {lista.length ? <table className="pc-tabela"><thead><tr><th>CPF/CNPJ</th><th>Nome/Razão Social</th></tr></thead><tbody>
-          {lista.slice(0, 100).map((t) => <tr key={t.id} className="clicavel" onClick={() => onEscolher(t)}><td className="nowrap">{formatarDocumento(t.documento)}</td><td>{t.nome}</td></tr>)}
+          {lista.slice(0, 100).map((t) => <tr key={t.id} className="clicavel" onClick={() => onEscolher(t)}><td className="nowrap">{t.exterior ? `${NOME_PAIS.get(t.exterior.pais) ?? t.exterior.pais}${t.documento ? ` · NIF ${t.documento}` : ""}` : formatarDocumento(t.documento)}</td><td>{t.nome}</td></tr>)}
         </tbody></table> : <p className="pc-vazio">{tomadores.length ? "Nenhum tomador encontrado." : "Nenhum tomador salvo ainda para esta empresa."}</p>}
       </div>
     </div>
   </div>;
+}
+
+const VAZIO_EXTERIOR = { nifInformado: "SIM", nif: "", motivo: "", nome: "", email: "", pais: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", cep: "", estado: "" };
+
+/** Tomador no exterior: NIF (ou o motivo de não ter), nome e endereço no exterior, como no Emissor Nacional. */
+function TomadorExterior({ erros }: { erros: Record<string, string> }) {
+  const [dados, setDados] = useState(VAZIO_EXTERIOR);
+  const campo = (nome: keyof typeof VAZIO_EXTERIOR) => ({ id: `ext_${nome}`, name: `ext_${nome}`, value: dados[nome], onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setDados((atual) => ({ ...atual, [nome]: e.target.value })) });
+  return <div className="pc-grade">
+    <fieldset className="pc-opcoes pc-campo terco">
+      <legend>O NIF será informado?<span className="pc-obrigatorio"> *</span></legend>
+      <label><input type="radio" name="ext_nifInformado" value="SIM" checked={dados.nifInformado === "SIM"} onChange={() => setDados((atual) => ({ ...atual, nifInformado: "SIM" }))} /> Sim</label>
+      <label><input type="radio" name="ext_nifInformado" value="NAO" checked={dados.nifInformado === "NAO"} onChange={() => setDados((atual) => ({ ...atual, nifInformado: "NAO" }))} /> Não</label>
+    </fieldset>
+    {dados.nifInformado === "SIM"
+      ? <Campo rotulo="NIF" obrigatorio erro={erros.nif} dica="Número de identificação fiscal no país do tomador." id="ext_nif" largura="terco"><input maxLength={40} autoComplete="off" {...campo("nif")} /></Campo>
+      : <Campo rotulo="Motivo da não informação do NIF" obrigatorio erro={erros.motivo} id="ext_motivo" largura="terco">
+        <select className="pc-input" {...campo("motivo")}><option value="">Selecione</option><option value="1">Dispensado do NIF</option><option value="2">Não exigência do NIF</option></select>
+      </Campo>}
+    <Campo rotulo="Nome/Razão Social" obrigatorio erro={erros.nome} id="ext_nome" largura="meia"><input maxLength={300} {...campo("nome")} /></Campo>
+    <Campo rotulo="E-mail" erro={erros.email} id="ext_email" largura="meia"><input type="email" maxLength={80} {...campo("email")} /></Campo>
+    <Campo rotulo="País" obrigatorio erro={erros.pais} id="ext_pais" largura="meia">
+      <select className="pc-input" {...campo("pais")}><option value="">Selecione</option>{paises.map((item) => <option key={item.codigo} value={item.codigo}>{item.nome}</option>)}</select>
+    </Campo>
+    <Campo rotulo="Logradouro" obrigatorio erro={erros.logradouro} id="ext_logradouro" largura="meia"><input maxLength={255} {...campo("logradouro")} /></Campo>
+    <Campo rotulo="Número" obrigatorio erro={erros.numero} id="ext_numero" largura="terco"><input maxLength={60} {...campo("numero")} /></Campo>
+    <Campo rotulo="Complemento" erro={erros.complemento} id="ext_complemento" largura="terco"><input maxLength={156} {...campo("complemento")} /></Campo>
+    <Campo rotulo="Bairro" obrigatorio erro={erros.bairro} id="ext_bairro" largura="terco"><input maxLength={60} {...campo("bairro")} /></Campo>
+    <Campo rotulo="Cidade" obrigatorio erro={erros.cidade} id="ext_cidade" largura="terco"><input maxLength={60} {...campo("cidade")} /></Campo>
+    <Campo rotulo="Código de Endereçamento Postal" obrigatorio erro={erros.cep} id="ext_cep" largura="terco"><input maxLength={11} {...campo("cep")} /></Campo>
+    <Campo rotulo="Estado, província ou região" obrigatorio erro={erros.estado} id="ext_estado" largura="terco"><input maxLength={60} {...campo("estado")} /></Campo>
+  </div>;
+}
+
+/** Intermediário do serviço no Brasil (CPF/CNPJ); o CNPJ puxa a razão social do cartão CNPJ e ela fica travada. */
+function Intermediario({ inicial, erros }: { inicial: IntermediarioRascunho | null; erros: Record<string, string> }) {
+  const [informar, setInformar] = useState(Boolean(inicial));
+  const [documento, setDocumento] = useState(inicial ? formatarDocumento(inicial.documento) : "");
+  const [nome, setNome] = useState(inicial?.nome ?? "");
+  const [email, setEmail] = useState(inicial?.email ?? "");
+  const [travado, setTravado] = useState(Boolean(inicial && inicial.documento.length === 14));
+  const [aviso, setAviso] = useState("");
+  const [consultando, iniciarConsulta] = useTransition();
+  function pesquisar(valor: string) {
+    iniciarConsulta(async () => {
+      const resposta = await consultarTomador(valor);
+      const cnpj = valor.replace(/\D/g, "").length === 14;
+      if (resposta.receita) { setNome(resposta.receita.legalName); setTravado(Boolean(resposta.receita.legalName)); setAviso("Razão social do cartão CNPJ (Receita)."); return; }
+      if (resposta.salvo) { setNome(resposta.salvo.nome); setTravado(cnpj); setAviso(""); return; }
+      setAviso(resposta.erro ?? "CPF: informe o nome.");
+    });
+  }
+  return <Cartao titulo="Intermediário do serviço">
+    <fieldset className="pc-opcoes">
+      <legend>Onde está localizado o estabelecimento/domicílio?<span className="pc-obrigatorio"> *</span></legend>
+      <label><input type="radio" name="intermOnde" value="BRASIL" checked={informar} onChange={() => setInformar(true)} /> Brasil</label>
+      <label className="desativado" title="Ainda não disponível no nosso emissor"><input type="radio" disabled /> Exterior <small>em breve</small></label>
+      <label><input type="radio" name="intermOnde" value="NAO_INFORMADO" checked={!informar} onChange={() => setInformar(false)} /> Intermediário não informado</label>
+    </fieldset>
+    {informar ? <div className="pc-grade">
+      <Campo rotulo="CPF/CNPJ" obrigatorio erro={erros.intermDocumento} id="intermDocumento" largura="terco">
+        <div className="pc-com-botoes">
+          <input id="intermDocumento" name="intermDocumento" inputMode="numeric" autoComplete="off" value={documento}
+            onChange={(e) => {
+              const valor = mascaraDocumento(e.target.value);
+              setDocumento(valor); setAviso("");
+              if (travado) { setTravado(false); setNome(""); }
+              if (valor.replace(/\D/g, "").length === 14) pesquisar(valor);
+            }}
+            onBlur={() => { if (!nome && documento.replace(/\D/g, "").length === 11) pesquisar(documento); }} />
+          <button type="button" className="pc-icone-botao" title="Pesquisar" aria-label="Pesquisar CPF/CNPJ do intermediário" onClick={() => pesquisar(documento)} disabled={consultando || !documento}>{consultando ? <LoaderCircle className="spin" size={17} aria-hidden /> : <Search size={17} aria-hidden />}</button>
+        </div>
+      </Campo>
+      <Campo rotulo="Nome/Razão Social" obrigatorio erro={erros.intermNome} id="intermNome" largura="meia">
+        <input id="intermNome" name="intermNome" maxLength={300} value={nome} readOnly={travado} title={travado ? "Razão social do cartão CNPJ (Receita): não pode ser alterada" : undefined} onChange={(e) => setNome(e.target.value)} />
+      </Campo>
+      <Campo rotulo="E-mail" erro={erros.intermEmail} id="intermEmail" largura="terco"><input id="intermEmail" name="intermEmail" type="email" maxLength={80} value={email} onChange={(e) => setEmail(e.target.value)} /></Campo>
+      {aviso ? <p className="pc-nota pc-campo inteira">{aviso}</p> : null}
+    </div> : null}
+  </Cartao>;
 }

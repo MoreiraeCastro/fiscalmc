@@ -17,6 +17,10 @@ import { ambienteEmissao, dadosEmitente, previaTributacao, servicosProntos, toma
 import { formatarData, formatarDocumento, formatarValor, hojeBrasilia } from "@/lib/contribuinte/formato";
 import { nomeMunicipio } from "@/lib/contribuinte/municipios";
 import { carregarRascunho } from "@/lib/contribuinte/rascunhos";
+import { listarFavoritos } from "@/lib/contribuinte/favoritos";
+import { usarFavoritoAction } from "@/app/contribuinte/favoritos/actions";
+import { SalvarComoFavorito } from "@/components/contribuinte/salvar-favorito";
+import { Star } from "lucide-react";
 
 export const metadata = { title: "Emissão completa" };
 
@@ -59,8 +63,15 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
   </>;
 
   if (passo.slug === "pessoas") {
-    const [emitente, tomadores] = await Promise.all([dadosEmitente(empresa.id), tomadoresSalvos(empresa.id)]);
-    return <>{cabecalho}<FormPessoas rascunhoId={rascunhoId} hoje={hojeBrasilia()} tomadores={tomadores}
+    const [emitente, tomadores, favoritos] = await Promise.all([dadosEmitente(empresa.id), tomadoresSalvos(empresa.id), novo ? listarFavoritos(empresa.id) : Promise.resolve([])]);
+    return <>{cabecalho}
+      {favoritos.length && empresa.podeEmitir ? <Cartao titulo="Começar de um serviço favorito" acoes={<Link className="pc-link" href="/contribuinte/favoritos">Gerenciar favoritos</Link>}>
+        <div className="pc-favoritos-rapidos">{favoritos.map((fav) => <form key={fav.id} action={usarFavoritoAction}>
+          <input type="hidden" name="id" value={fav.id} />
+          <button type="submit"><Star size={15} aria-hidden /><span><strong>{fav.nome}</strong><small>{fav.dados.semTomador ? "Sem tomador" : fav.dados.tomador?.nome ?? "Tomador na emissão"}{fav.dados.valorCentavos ? ` · R$ ${formatarValor(fav.dados.valorCentavos)}` : ""}</small></span></button>
+        </form>)}</div>
+      </Cartao> : null}
+      <FormPessoas rascunhoId={rascunhoId} hoje={hojeBrasilia()} tomadores={tomadores}
       inicial={{ competencia: dados.competencia ?? hojeBrasilia(), tomador: dados.tomador ?? null, semTomador: Boolean(dados.semTomador), informarIbsCbs: Boolean(dados.informarIbsCbs) }}
       ibsCbsObrigatorioDesde={IBS_CBS_OBRIGATORIO_DESDE[getConfiguredNFSeEnvironment()]}
       emitente={{ ...emitente, municipio: nomeMunicipio(emitente.municipio) }} /></>;
@@ -144,6 +155,7 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
         {valores.aliquotaManualBp !== undefined ? <div><dt>Alíquota informada</dt><dd>{aliquotaTexto(valores.aliquotaManualBp)} · fonte: {valores.fonteAliquota}</dd></div> : null}
       </dl>
     </Cartao>
+    {!subst && empresa.podeEmitir ? <div className="pc-nao-imprime"><SalvarComoFavorito rascunhoId={rascunhoId!} nomeSugerido={(servico?.descricaoCodigo ?? servico?.nome ?? "Serviço").slice(0, 60)} /></div> : null}
     <Cartao titulo="Prévia dos valores da NFS-e">
       {previa?.aviso ? <Aviso tipo="alerta">{previa.aviso}</Aviso> : null}
       <div className="pc-previa">

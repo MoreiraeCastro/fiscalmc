@@ -261,3 +261,17 @@ select.pc-input { appearance: auto; }
 .pc-seletor-painel strong { display: block; font-size: 13px; }
 .pc-seletor-painel small { display: block; font-size: 12px; color: var(--muted); }
 .pc-seletor-vazio { margin: 0; padding: 10px; font-size: 13px; color: var(--muted); }
+
+/* ---- Serviços Favoritos e Configurações ---- */
+.pc-botao.pequeno { min-height: 30px; padding: 0 10px; font-size: 12.5px; gap: 5px; }
+.pc-tabela .acoes.nowrap { width: auto; display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
+.pc-favoritos-rapidos { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.pc-favoritos-rapidos form { display: contents; }
+.pc-favoritos-rapidos button { display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: #fff; text-align: left; cursor: pointer; color: var(--ink); font: inherit; }
+.pc-favoritos-rapidos button:hover { border-color: var(--navy-3); background: #f7f9fb; }
+.pc-favoritos-rapidos svg { color: var(--orange); margin-top: 2px; flex: 0 0 auto; }
+.pc-favoritos-rapidos strong { display: block; font-size: 13.5px; }
+.pc-favoritos-rapidos small { display: block; font-size: 12px; color: var(--muted); }
+.pc-favorito-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.pc-favorito-inline .pc-input { width: min(320px, 100%); min-height: 34px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.pc-link.botao { display: inline-flex; align-items: center; gap: 5px; }

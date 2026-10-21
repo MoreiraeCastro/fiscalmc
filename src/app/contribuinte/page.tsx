@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, FilePen, FilePlus2, FileText } from "lucide-react";
+import { Building2, FilePen, FilePlus2, FileText, Settings, Star } from "lucide-react";
 import { Aviso, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { TabelaUltimas } from "@/components/contribuinte/tabela-notas";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
@@ -39,6 +39,8 @@ export default async function PaginaPrincipal() {
           <Link href="/contribuinte/nova"><FilePlus2 size={22} aria-hidden />Nova NFS-e</Link>
           <Link href="/contribuinte/notas/emitidas"><FileText size={22} aria-hidden />NFS-e Emitidas</Link>
           <Link href="/contribuinte/notas/rascunhos"><FilePen size={22} aria-hidden />Rascunhos</Link>
+          <Link href="/contribuinte/favoritos"><Star size={22} aria-hidden />Meus Favoritos</Link>
+          <Link href="/contribuinte/configuracoes"><Settings size={22} aria-hidden />Configurações</Link>
           {escritorio || empresas.length > 1 ? <Link href="/contribuinte/empresa"><Building2 size={22} aria-hidden />Trocar empresa</Link> : null}
         </div>
       </Cartao>

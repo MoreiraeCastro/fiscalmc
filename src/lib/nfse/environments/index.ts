@@ -30,6 +30,12 @@ export const municipalParametersEndpoints = {
   PRODUCTION: "https://adn.nfse.gov.br/parametrizacao",
 } as const;
 
+/** Distribuição de documentos ao contribuinte (NFS-e Recebidas): GET {base}/DFe/{ultimoNSU}?lote=true. Só leitura. */
+export const distributionEndpoints = {
+  PRODUCTION_RESTRICTED: "https://adn.producaorestrita.nfse.gov.br/contribuintes",
+  PRODUCTION: "https://adn.nfse.gov.br/contribuintes",
+} as const;
+
 export const danfseEndpoints = {
   PRODUCTION_RESTRICTED: "https://adn.producaorestrita.nfse.gov.br/danfse",
   PRODUCTION: "https://adn.nfse.gov.br/danfse",

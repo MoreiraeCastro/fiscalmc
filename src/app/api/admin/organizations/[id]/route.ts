@@ -5,11 +5,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { can } from "@/lib/security/authorization";
 import { createClientAccessService } from "@/lib/auth/client-access-service";
 import { getOrganizationReadiness } from "@/lib/organizations/readiness";
-import { getFiscalConfigurationReadiness } from "@/lib/nfse/fiscal-configuration";
+import { getFiscalConfigurationReadiness, isFiscalProfileAccepted } from "@/lib/nfse/fiscal-configuration";
+import { isAdnAutomaticService } from "@/lib/services/automatic-service";
 import { getServiceReadiness } from "@/lib/nfse/service-readiness";
 import { getCertificateReadiness } from "@/lib/nfse/certificate/status";
 
-const patchSchema = z.object({ action: z.enum(["release", "block"]) }).strict();
+const patchSchema = z.object({ action: z.enum(["release", "block", "require_review", "allow_automatic"]) }).strict();
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -20,6 +21,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const db = createAdminClient();
     const input = patchSchema.parse(await request.json());
 
+    // Chave "só serviços revisados": ligada, a empresa volta a emitir só com perfil fiscal e serviços revisados pelo escritório.
+    if (input.action === "require_review" || input.action === "allow_automatic") {
+      const requireOfficeReview = input.action === "require_review";
+      const { error } = await db.from("organizations").update({ require_office_review: requireOfficeReview }).eq("id", id);
+      if (error) throw error;
+      await db.from("audit_logs").insert({ organization_id: id, actor_user_id: session.userId, actor_type: "OFFICE", action: requireOfficeReview ? "office_review_required" : "automatic_emission_allowed", entity: "organization", entity_id: id, safe_metadata: {} });
+      return NextResponse.json({ ok: true, requireOfficeReview });
+    }
+
     if (input.action === "block") {
       const { error } = await db.from("organizations").update({ emission_blocked: true }).eq("id", id);
       if (error) throw error;
@@ -28,20 +38,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     const [{ data: organization }, { data: services }, { data: profile }, { data: certificate }, clientAccess] = await Promise.all([
-      db.from("organizations").select("id,status,municipal_registration,street,address_number,neighborhood,state,tax_id").eq("id", id).maybeSingle(),
-      db.from("service_templates").select("id,active,workflow_status,national_service_code_id,national_tax_code,municipal_service_code,municipal_service_mapping_id,dps_municipal_tax_code,dps_municipal_tax_code_source,service_location_municipality_code,nbs_code,iss_taxation,iss_rate_source,fiscal_reference,reviewed_at,reviewed_by").eq("organization_id", id),
-      db.from("tax_profiles").select("tax_regime,reviewed_at,reviewed_by,iss_configuration,dps_configuration").eq("organization_id", id).maybeSingle(),
+      db.from("organizations").select("id,status,municipal_registration,street,address_number,neighborhood,state,tax_id,require_office_review").eq("id", id).maybeSingle(),
+      db.from("service_templates").select("id,active,workflow_status,national_service_code_id,national_tax_code,municipal_service_code,municipal_service_mapping_id,dps_municipal_tax_code,dps_municipal_tax_code_source,service_location_municipality_code,nbs_code,iss_taxation,iss_rate_source,fiscal_reference,reviewed_at,reviewed_by,auto_ready_source").eq("organization_id", id),
+      db.from("tax_profiles").select("tax_regime,reviewed_at,reviewed_by,iss_configuration,dps_configuration,origin").eq("organization_id", id).maybeSingle(),
       db.from("digital_certificates").select("status,owner_tax_id,valid_until").eq("organization_id", id).is("replaced_at", null).maybeSingle(),
       createClientAccessService(db).getSummary(id),
     ]);
     if (!organization) return NextResponse.json({ error: "Empresa não encontrada." }, { status: 404 });
     const fiscalReadiness = getFiscalConfigurationReadiness(profile);
     const certificateReadiness = getCertificateReadiness({ certificate, organizationTaxId: organization.tax_id });
-    const readyServices = (services ?? []).filter((service) => getServiceReadiness(service).ready);
+    const requireOfficeReview = Boolean(organization.require_office_review);
+    const readyServices = (services ?? []).filter((service) => getServiceReadiness(service).ready && !(requireOfficeReview && isAdnAutomaticService(service)));
     const organizationReadiness = getOrganizationReadiness({
       registration: { municipalRegistration: organization.municipal_registration, street: organization.street, addressNumber: organization.address_number, neighborhood: organization.neighborhood, state: organization.state },
-      fiscal: { ready: fiscalReadiness.status === "REVIEWED", message: "" },
-      services: { ready: readyServices.length > 0, message: "" },
+      fiscal: { ready: isFiscalProfileAccepted(fiscalReadiness.status, requireOfficeReview), message: "" },
+      // Sem a exigência de revisão, o passo 2 usa a lista nacional: não precisa de serviço cadastrado antes.
+      services: { ready: !requireOfficeReview || readyServices.length > 0, message: "" },
       certificate: { ready: certificateReadiness.ready, message: certificateReadiness.message },
       clientAccess: clientAccess?.readiness ?? { ready: false, message: "Acesso do cliente não cadastrado." },
     });

@@ -4,6 +4,9 @@ import { relationOne } from "@/lib/presentation/relations";
 import { getServiceReadiness } from "@/lib/nfse/service-readiness";
 import { resolveFiscalConfiguration } from "@/lib/nfse/fiscal-rule-resolver";
 import { getConfiguredNFSeEnvironment } from "@/lib/nfse/environments";
+import { getFiscalConfigurationReadiness, isFiscalProfileAccepted } from "@/lib/nfse/fiscal-configuration";
+import { isAdnAutomaticService } from "@/lib/services/automatic-service";
+import { ensureAutomaticTaxProfile } from "@/lib/organizations/automatic-tax-profile";
 import type { DadosRascunho } from "./dps";
 
 export const TRIBUTACAO_ISSQN: Record<string, string> = { "1": "Operação Tributável", "2": "Imunidade", "3": "Exportação de Serviço", "4": "Não Incidência" };
@@ -53,21 +56,56 @@ export async function dadosEmitente(empresaId: string) {
 export type ServicoPronto = {
   id: string; nome: string; codigo: string | null; descricaoCodigo: string | null; nbs: string | null;
   municipioPrestacao: string | null; descricaoPadrao: string | null; tributacao: string | null; exigeAliquotaManual: boolean;
+  /** Para o passo 2 com a lista nacional: o código do catálogo, o código complementar municipal e se foi montado sozinho pelo ADN. */
+  codigoNacionalId: string | null; codigoMunicipal: string | null; automatico: boolean;
 };
 
-/** Serviços da empresa prontos para emitir (revisados pelo escritório). Fazem o papel do "Código de Tributação Nacional". */
+/**
+ * Como esta empresa emite. livre = "subiu o A1, está pronto" (lista nacional completa no passo 2, perfil automático vale);
+ * exigeRevisao = só o que o escritório revisou (a chave "só serviços revisados" da empresa).
+ * Cria o perfil fiscal automático se a empresa ainda não tiver nenhum.
+ */
+export async function modoEmissao(empresaId: string) {
+  const db = createAdminClient();
+  const { data: empresa } = await db.from("organizations").select("require_office_review").eq("id", empresaId).maybeSingle();
+  const exigeRevisao = Boolean(empresa?.require_office_review);
+  if (!exigeRevisao) await ensureAutomaticTaxProfile(db, empresaId);
+  const { data: perfil } = await db.from("tax_profiles").select("tax_regime,dps_configuration,reviewed_at,reviewed_by,origin").eq("organization_id", empresaId).maybeSingle();
+  const status = getFiscalConfigurationReadiness(perfil).status;
+  return { exigeRevisao, perfilAceito: isFiscalProfileAccepted(status, exigeRevisao), perfilAutomatico: status === "AUTOMATIC" };
+}
+
+/** Serviços da empresa prontos para emitir: os do escritório e, se a empresa não exige revisão, os montados sozinhos pelo ADN. */
 export async function servicosProntos(empresaId: string): Promise<ServicoPronto[]> {
-  const { data } = await createAdminClient().from("service_templates")
-    .select("id,name,default_description,active,workflow_status,national_service_code_id,national_tax_code,municipal_service_code,municipal_service_mapping_id,dps_municipal_tax_code,dps_municipal_tax_code_source,service_location_municipality_code,nbs_code,iss_taxation,iss_rate_source,fiscal_reference,reviewed_at,reviewed_by,national_service_codes(display_code,description)")
-    .eq("organization_id", empresaId).eq("active", true).in("workflow_status", ["REVIEWED", "AUTO_READY"]).order("name");
-  return (data ?? []).filter((item) => getServiceReadiness(item).ready).map((item) => {
+  const db = createAdminClient();
+  const [{ data }, { data: empresa }] = await Promise.all([
+    db.from("service_templates")
+      .select("id,name,default_description,active,workflow_status,auto_ready_source,national_service_code_id,national_tax_code,municipal_service_code,municipal_service_mapping_id,dps_municipal_tax_code,dps_municipal_tax_code_source,service_location_municipality_code,nbs_code,iss_taxation,iss_rate_source,fiscal_reference,reviewed_at,reviewed_by,national_service_codes(display_code,description)")
+      .eq("organization_id", empresaId).eq("active", true).in("workflow_status", ["REVIEWED", "AUTO_READY"]).order("name"),
+    db.from("organizations").select("require_office_review").eq("id", empresaId).maybeSingle(),
+  ]);
+  return (data ?? []).filter((item) => getServiceReadiness(item).ready && !(empresa?.require_office_review && isAdnAutomaticService(item))).map((item) => {
     const codigo = relationOne(item.national_service_codes as { display_code: string; description: string } | { display_code: string; description: string }[] | null);
     return {
       id: item.id, nome: item.name, codigo: codigo?.display_code ?? item.national_tax_code, descricaoCodigo: codigo?.description ?? null,
       nbs: item.nbs_code, municipioPrestacao: item.service_location_municipality_code, descricaoPadrao: item.default_description,
       tributacao: item.iss_taxation, exigeAliquotaManual: item.iss_taxation !== "3" && item.iss_taxation !== "4" && item.iss_rate_source !== "PARAMETRIZED_BY_NATIONAL" && !item.municipal_service_mapping_id,
+      codigoNacionalId: item.national_service_code_id, codigoMunicipal: item.municipal_service_code, automatico: isAdnAutomaticService(item),
     };
   });
+}
+
+export type CodigoNacional = { id: string; codigo: string; descricao: string };
+
+let catalogoGuardado: { em: number; itens: CodigoNacional[] } | null = null;
+
+/** Lista nacional de serviços (cTribNac, Anexo B), a mesma do campo "Código de Tributação Nacional" do Emissor Nacional. */
+export async function catalogoNacional(): Promise<CodigoNacional[]> {
+  if (catalogoGuardado && Date.now() - catalogoGuardado.em < 60 * 60 * 1000) return catalogoGuardado.itens;
+  const { data } = await createAdminClient().from("national_service_codes").select("id,display_code,description").eq("active", true).order("display_code").limit(2000);
+  const itens = (data ?? []).map((item) => ({ id: item.id, codigo: item.display_code, descricao: item.description }));
+  if (itens.length) catalogoGuardado = { em: Date.now(), itens };
+  return itens;
 }
 
 /** exterior: tomador no exterior (documento = NIF, pais = ISO do país). */
@@ -99,9 +137,12 @@ export async function previaTributacao(empresaId: string, dados: DadosRascunho):
   const db = createAdminClient();
   const [{ data: empresa }, { data: perfil }, { data: servico }] = await Promise.all([
     db.from("organizations").select("municipality_code").eq("id", empresaId).single(),
-    db.from("tax_profiles").select("tax_regime,reviewed_at,dps_configuration").eq("organization_id", empresaId).maybeSingle(),
-    db.from("service_templates").select("national_tax_code,municipal_service_code,dps_municipal_tax_code,nbs_code,iss_taxation,iss_rate_source,fiscal_reference").eq("organization_id", empresaId).eq("id", dados.servico.modeloId).maybeSingle(),
+    db.from("tax_profiles").select("tax_regime,reviewed_at,reviewed_by,dps_configuration,origin").eq("organization_id", empresaId).maybeSingle(),
+    db.from("service_templates").select("national_tax_code,municipal_service_code,dps_municipal_tax_code,nbs_code,iss_taxation,iss_rate_source,fiscal_reference,workflow_status,auto_ready_source").eq("organization_id", empresaId).eq("id", dados.servico.modeloId).maybeSingle(),
   ]);
+  const { data: org } = await db.from("organizations").select("require_office_review").eq("id", empresaId).maybeSingle();
+  const exigeRevisao = Boolean(org?.require_office_review);
+  const statusPerfil = perfil ? getFiscalConfigurationReadiness(perfil).status : "DRAFT";
   if (!empresa || !perfil || !servico) return null;
   const manual = dados.valores?.aliquotaManualBp !== undefined && dados.valores.fonteAliquota
     ? { manualRateBasisPoints: dados.valores.aliquotaManualBp, manualRateSourceNote: dados.valores.fonteAliquota } : {};
@@ -110,7 +151,8 @@ export async function previaTributacao(empresaId: string, dados: DadosRascunho):
       resolveFiscalConfiguration({
         organizationId: empresaId, municipalityCode: empresa.municipality_code, nationalTaxCode: servico.national_tax_code, municipalServiceCode: servico.municipal_service_code,
         dpsMunicipalTaxCode: servico.dps_municipal_tax_code, nbsCode: servico.nbs_code, issTaxation: servico.iss_taxation, issRateSource: servico.iss_rate_source,
-        fiscalReference: servico.fiscal_reference, taxRegime: perfil.tax_regime, reviewedAt: perfil.reviewed_at, serviceDate: dados.competencia, dpsConfiguration: perfil.dps_configuration, ...manual,
+        fiscalReference: servico.fiscal_reference, taxRegime: perfil.tax_regime, reviewedAt: perfil.reviewed_at, serviceDate: dados.competencia,
+        automaticProfile: statusPerfil === "AUTOMATIC" && isFiscalProfileAccepted(statusPerfil, exigeRevisao), automaticService: !exigeRevisao && isAdnAutomaticService(servico), dpsConfiguration: perfil.dps_configuration, ...manual,
       }),
       new Promise<never>((_, rejeitar) => setTimeout(() => rejeitar(new Error("TIMEOUT")), 10_000)),
     ]);
@@ -119,8 +161,8 @@ export async function previaTributacao(empresaId: string, dados: DadosRascunho):
       tributacao: TRIBUTACAO_ISSQN[fiscal.iss.taxation] ?? fiscal.iss.taxation,
       retencao: RETENCAO_ISSQN[fiscal.iss.withholdingType] ?? fiscal.iss.withholdingType,
       retido,
-      aliquotaBp: fiscal.iss.rateBasisPoints,
-      origemAliquota: fiscal.iss.source === "OFFICE_PARAMETER" ? "informada pelo escritório" : fiscal.iss.rateBasisPoints === undefined ? "calculada pela Receita na emissão (parâmetros do município)" : "parâmetros do município",
+      aliquotaBp: fiscal.iss.rateBasisPoints ?? fiscal.iss.parametrizedRateBasisPoints,
+      origemAliquota: fiscal.iss.source === "OFFICE_PARAMETER" ? "informada pelo escritório" : fiscal.iss.rateBasisPoints === undefined ? "parâmetros do município (a Receita aplica na emissão)" : "parâmetros do município",
     };
   } catch {
     return {

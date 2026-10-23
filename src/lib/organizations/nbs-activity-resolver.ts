@@ -31,3 +31,17 @@ export function searchNbsCatalog(query: string, limit = 60): NbsCandidate[] {
     : allNbs;
   return pool.slice(0, limit);
 }
+
+/** NBS correlacionadas a um item/subitem da LC 116 (o cTribNac começa por eles), como sugestão no passo 2. */
+export function nbsForLc116(item: string, subitem: string): NbsCandidate[] {
+  const i = String(Number(item));
+  const s = String(Number(subitem));
+  const vistos = new Set<string>();
+  return (correlations as Correlation[])
+    .filter((row) => row.lc116Item === i && row.lc116Subitem === s && !vistos.has(row.nbsCode) && vistos.add(row.nbsCode))
+    .map((row) => ({ nbsCode: row.nbsCode, nbsDisplayCode: row.nbsDisplayCode, nbsDescription: row.nbsDescription }));
+}
+
+export function findNbs(code: string): NbsCandidate | null {
+  return allNbs.find((item) => item.nbsCode === code) ?? null;
+}

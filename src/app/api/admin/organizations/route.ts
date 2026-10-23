@@ -5,6 +5,7 @@ import { requireOfficeSession } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveCnaeActivity } from "@/lib/organizations/cnae-activity-resolver";
 import { createServiceFromNationalCode } from "@/lib/services/catalog-linking";
+import { ensureAutomaticTaxProfile } from "@/lib/organizations/automatic-tax-profile";
 import { logEvent } from "@/lib/observability/logger";
 
 const optionalText=(maximum:number)=>z.string().trim().max(maximum).optional().transform(value=>value||null);
@@ -48,7 +49,9 @@ export async function POST(request:Request){
     const {data:organization,error}=await db.from("organizations").insert({...toOrganizationPayload(data),status:"ACTIVE",emission_blocked:false}).select("id").single();
     if(error)throw error;
     await linkPrimaryActivity(db,organization.id,data.cnaeFiscalCode,office.userId);
-    return NextResponse.json({organization},{status:201});
+    // Perfil fiscal automático (Simples/MEI pela Receita): com o A1, a empresa já emite sem revisão.
+    const taxProfile=await ensureAutomaticTaxProfile(db,organization.id);
+    return NextResponse.json({organization,taxProfile},{status:201});
   }catch(error){
     if(error instanceof z.ZodError)return NextResponse.json({error:"Revise os campos obrigatórios e os formatos informados."},{status:400});
     logEvent("error","ORGANIZATION_CREATE_FAILED",{error:error instanceof Error?`${error.name}: ${error.message}`:String(error)});

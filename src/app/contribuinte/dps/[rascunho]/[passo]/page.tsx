@@ -15,7 +15,7 @@ import { getConfiguredNFSeEnvironment } from "@/lib/nfse/environments";
 import { CST_IBS_CBS, IBS_CBS_OBRIGATORIO_DESDE, IBS_CBS_PADRAO } from "@/lib/nfse/ibs-cbs";
 import indicadores from "@/lib/contribuinte/indicadores-operacao.json";
 import { relationOne } from "@/lib/presentation/relations";
-import { ambienteEmissao, dadosEmitente, previaTributacao, servicosProntos, tomadoresSalvos, tomadorPorId, type Previa } from "@/lib/contribuinte/emissao";
+import { ambienteEmissao, catalogoNacional, dadosEmitente, modoEmissao, previaTributacao, servicosProntos, tomadoresSalvos, tomadorPorId, type Previa } from "@/lib/contribuinte/emissao";
 import { formatarData, formatarDocumento, formatarValor, hojeBrasilia } from "@/lib/contribuinte/formato";
 import { nomeMunicipio } from "@/lib/contribuinte/municipios";
 import { carregarRascunho } from "@/lib/contribuinte/rascunhos";
@@ -83,7 +83,12 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
 
   const servicos = await servicosProntos(empresa.id);
   if (passo.slug === "servico") {
-    return <>{cabecalho}<FormServico rascunhoId={rascunhoId!} escritorio={escritorio} empresaId={empresa.id}
+    const modo = await modoEmissao(empresa.id);
+    const nacional = modo.exigeRevisao ? null : {
+      catalogo: await catalogoNacional(), competencia: dados.competencia ?? hojeBrasilia(), municipio: nomeMunicipio(empresa.municipio),
+      usados: servicos.map((item) => ({ id: item.id, codigoNacionalId: item.codigoNacionalId, codigoMunicipal: item.codigoMunicipal, nbs: item.nbs, automatico: item.automatico })),
+    };
+    return <>{cabecalho}<FormServico rascunhoId={rascunhoId!} escritorio={escritorio} empresaId={empresa.id} nacional={nacional}
       ibsCbs={dados.informarIbsCbs ? dados.ibsCbs ?? { cst: IBS_CBS_PADRAO.cst, classificacao: IBS_CBS_PADRAO.classification, indicadorOperacao: IBS_CBS_PADRAO.operationIndicator, consumoPessoal: IBS_CBS_PADRAO.finalConsumer } : null}
       inicial={{ modeloId: dados.servico?.modeloId ?? "", descricao: dados.servico?.descricao ?? "" }}
       complemento={dados.complemento ?? null} comercioExterior={dados.tomador?.exterior ? dados.comercioExterior ?? {} : null}

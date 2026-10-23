@@ -19,7 +19,7 @@ export async function GET(_request:Request,{params}:{params:Promise<{id:string}>
     await requireOfficeSession();
     const {id}=await params;
     if(!z.string().uuid().safeParse(id).success||!await organizationExists(id))return NextResponse.json({error:"Empresa não encontrada."},{status:404});
-    const {data:profile,error}=await createAdminClient().from("tax_profiles").select("tax_regime,dps_configuration,reviewed_at,reviewed_by").eq("organization_id",id).maybeSingle();
+    const {data:profile,error}=await createAdminClient().from("tax_profiles").select("tax_regime,dps_configuration,reviewed_at,reviewed_by,origin").eq("organization_id",id).maybeSingle();
     if(error)throw error;
     return NextResponse.json({configuration:getFiscalConfigurationReadiness(profile)});
   }catch{return NextResponse.json({error:"Não foi possível carregar a configuração fiscal."},{status:403});}
@@ -35,10 +35,10 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     const admin=createAdminClient();
     const {data:previous,error:previousError}=await admin.from("tax_profiles").select("dps_configuration").eq("organization_id",id).maybeSingle();
     if(previousError)throw previousError;
-    const {error}=await admin.from("tax_profiles").upsert({organization_id:id,tax_regime:form.taxRegime,dps_configuration:normalizeFiscalConfiguration(form,previous?.dps_configuration,technical),reviewed_at:null,reviewed_by:null},{onConflict:"organization_id"});
+    const {error}=await admin.from("tax_profiles").upsert({organization_id:id,tax_regime:form.taxRegime,dps_configuration:normalizeFiscalConfiguration(form,previous?.dps_configuration,technical),reviewed_at:null,reviewed_by:null,origin:"OFFICE"},{onConflict:"organization_id"});
     if(error)throw error;
     await writeAudit(previous?"tax_profile_updated":"tax_profile_created",id,session.userId);
-    const {data:profile}=await admin.from("tax_profiles").select("tax_regime,dps_configuration,reviewed_at,reviewed_by").eq("organization_id",id).single();
+    const {data:profile}=await admin.from("tax_profiles").select("tax_regime,dps_configuration,reviewed_at,reviewed_by,origin").eq("organization_id",id).single();
     return NextResponse.json({configuration:getFiscalConfigurationReadiness(profile)});
   }catch(error){
     if(error instanceof z.ZodError)return NextResponse.json({error:"Revise a configuração fiscal informada."},{status:400});
@@ -51,7 +51,7 @@ export async function POST(_request:Request,{params}:{params:Promise<{id:string}
     const {id}=await params;
     if(!await organizationExists(id))return NextResponse.json({error:"Empresa não encontrada."},{status:404});
     const admin=createAdminClient();
-    const {data:profile,error}=await admin.from("tax_profiles").select("tax_regime,dps_configuration,reviewed_at,reviewed_by").eq("organization_id",id).maybeSingle();
+    const {data:profile,error}=await admin.from("tax_profiles").select("tax_regime,dps_configuration,reviewed_at,reviewed_by,origin").eq("organization_id",id).maybeSingle();
     if(error)throw error;
     const readiness=getFiscalConfigurationReadiness(profile);
     if(!profile||readiness.status==="INVALID"||readiness.missing.length)return NextResponse.json({error:"Conclua os campos fiscais pendentes antes de marcar como revisado.",missing:readiness.missing},{status:422});

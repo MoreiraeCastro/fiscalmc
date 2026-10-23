@@ -11,7 +11,8 @@ import { createClient } from "@/lib/supabase/server";
 import { resolveFiscalConfiguration } from "@/lib/nfse/fiscal-rule-resolver";
 import { SafeFiscalError } from "@/lib/nfse/errors";
 import { getServiceReadiness } from "@/lib/nfse/service-readiness";
-import { getFiscalConfigurationReadiness } from "@/lib/nfse/fiscal-configuration";
+import { getFiscalConfigurationReadiness,isFiscalProfileAccepted } from "@/lib/nfse/fiscal-configuration";
+import { isAdnAutomaticService } from "@/lib/services/automatic-service";
 import { getCertificateReadiness } from "@/lib/nfse/certificate/status";
 import { getOrganizationReadiness } from "@/lib/organizations/readiness";
 import { assertNationalEmissionReady } from "@/lib/nfse/issuance/restricted-readiness";
@@ -111,11 +112,11 @@ export async function POST(request:Request){
 
     const effective:Input=existing?{...requested,customerId:existing.customer_id??undefined,serviceTemplateId:existing.service_template_id,amount:Number(existing.amount_cents)/100,serviceDate:existing.service_date,description:existing.description,substitution:existing.substitutes_invoice_id?{invoiceId:existing.substitutes_invoice_id,reasonCode:existing.substitution_reason_code as NonNullable<Input["substitution"]>["reasonCode"],...(existing.substitution_reason?{reason:existing.substitution_reason}:{})}:undefined,ibsCbs:(existing.ibs_cbs as Input["ibsCbs"])??undefined,extras:(existing.dps_extras as Input["extras"])??undefined}:requested;
     const[{data:organization},{data:customer},{data:service},{data:profile},{data:certificate},{data:clientAccess}]=await Promise.all([
-      admin.from("organizations").select("id,legal_name,tax_id,municipal_registration,municipality_code,status,emission_blocked,postal_code,street,address_number,address_complement,neighborhood,state,email,phone").eq("id",session.organizationId).single(),
+      admin.from("organizations").select("id,legal_name,tax_id,municipal_registration,municipality_code,status,emission_blocked,require_office_review,postal_code,street,address_number,address_complement,neighborhood,state,email,phone").eq("id",session.organizationId).single(),
       // Sem customerId = Tomador/Adquirente não informado (a DPS sai sem o grupo toma).
       effective.customerId?admin.from("customers").select("id,person_type,tax_id,legal_name,email,phone,postal_code,street,address_number,address_complement,neighborhood,municipal_registration,municipality_code,state,country_code,foreign_tax_id,no_foreign_tax_id_reason,city,foreign_postal_code").eq("id",effective.customerId).eq("organization_id",session.organizationId).maybeSingle():Promise.resolve({data:null}),
-      admin.from("service_templates").select("id,national_tax_code,municipal_service_code,municipal_service_mapping_id,national_service_code_id,dps_municipal_tax_code,dps_municipal_tax_code_source,service_location_municipality_code,nbs_code,iss_taxation,iss_rate_source,fiscal_reference,workflow_status,reviewed_at,reviewed_by,active").eq("id",effective.serviceTemplateId).eq("organization_id",session.organizationId).in("workflow_status",["REVIEWED","AUTO_READY"]).eq("active",true).single(),
-      admin.from("tax_profiles").select("tax_regime,reviewed_at,reviewed_by,iss_configuration,dps_configuration").eq("organization_id",session.organizationId).single(),
+      admin.from("service_templates").select("id,national_tax_code,municipal_service_code,municipal_service_mapping_id,national_service_code_id,dps_municipal_tax_code,dps_municipal_tax_code_source,service_location_municipality_code,nbs_code,iss_taxation,iss_rate_source,fiscal_reference,workflow_status,auto_ready_source,reviewed_at,reviewed_by,active").eq("id",effective.serviceTemplateId).eq("organization_id",session.organizationId).in("workflow_status",["REVIEWED","AUTO_READY"]).eq("active",true).single(),
+      admin.from("tax_profiles").select("tax_regime,reviewed_at,reviewed_by,iss_configuration,dps_configuration,origin").eq("organization_id",session.organizationId).single(),
       admin.from("digital_certificates").select("status,owner_tax_id,valid_until").eq("organization_id",session.organizationId).is("replaced_at",null).maybeSingle(),
       admin.from("client_accesses").select("enabled").eq("organization_id",session.organizationId).eq("enabled",true).maybeSingle(),
     ]);
@@ -123,11 +124,18 @@ export async function POST(request:Request){
     // Tomador no exterior: a SEFIN exige o grupo de comércio exterior (E0330).
     if(customer?.person_type==="FOREIGN"&&!effective.extras?.foreignTrade)throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","Tomador no exterior: informe os dados de comércio exterior no passo Serviço.");
     stage="READINESS";
-    const serviceReadiness=getServiceReadiness(service);
+    // "Subiu o A1, está pronto": perfil automático e serviço automático do ADN valem, a não ser que a empresa exija revisão do escritório.
+    const requireOfficeReview=Boolean(organization.require_office_review);
+    const automaticService=isAdnAutomaticService(service);
+    const baseServiceReadiness=getServiceReadiness(service);
+    const serviceReadiness={...baseServiceReadiness,ready:baseServiceReadiness.ready&&!(automaticService&&requireOfficeReview)};
     const fiscalReadiness=getFiscalConfigurationReadiness(profile);
+    const fiscalAccepted=isFiscalProfileAccepted(fiscalReadiness.status,requireOfficeReview);
+    // O acesso do cliente ao portal só importa quando é ele quem emite; o escritório emite com o A1 da empresa.
+    const clientAccessReady=session.actorType==="OFFICE"||Boolean(clientAccess?.enabled);
     const certificateReadiness=getCertificateReadiness({certificate,organizationTaxId:organization.tax_id});
-    const organizationReadiness=getOrganizationReadiness({registration:{municipalRegistration:organization.municipal_registration,street:organization.street,addressNumber:organization.address_number,neighborhood:organization.neighborhood,state:organization.state},fiscal:{ready:fiscalReadiness.status==="REVIEWED",message:""},services:{ready:serviceReadiness.ready,message:""},certificate:{ready:certificateReadiness.ready,message:""},clientAccess:{ready:Boolean(clientAccess?.enabled),message:""}});
-    const nationalEnvironment=process.env.NFSE_PROVIDER==="national"?assertNationalEmissionReady({registrationReady:organizationReadiness.items.find(x=>x.key==="registration")?.ready??false,fiscalReady:fiscalReadiness.status==="REVIEWED",serviceReady:serviceReadiness.ready,certificateReady:certificateReadiness.ready,clientAccessReady:Boolean(clientAccess?.enabled),organizationStatus:organization.status,emissionBlocked:organization.emission_blocked,environment:process.env.NFSE_ENV,provider:process.env.NFSE_PROVIDER,productionEnabled:process.env.ENABLE_NFSE_PRODUCTION,restrictedTransmissionEnabled:process.env.ENABLE_NFSE_RESTRICTED_TRANSMISSION}):undefined;
+    const organizationReadiness=getOrganizationReadiness({registration:{municipalRegistration:organization.municipal_registration,street:organization.street,addressNumber:organization.address_number,neighborhood:organization.neighborhood,state:organization.state},fiscal:{ready:fiscalAccepted,message:""},services:{ready:serviceReadiness.ready,message:""},certificate:{ready:certificateReadiness.ready,message:""},clientAccess:{ready:clientAccessReady,message:""}});
+    const nationalEnvironment=process.env.NFSE_PROVIDER==="national"?assertNationalEmissionReady({registrationReady:organizationReadiness.items.find(x=>x.key==="registration")?.ready??false,fiscalReady:fiscalAccepted,serviceReady:serviceReadiness.ready,certificateReady:certificateReadiness.ready,clientAccessReady,organizationStatus:organization.status,emissionBlocked:organization.emission_blocked,environment:process.env.NFSE_ENV,provider:process.env.NFSE_PROVIDER,productionEnabled:process.env.ENABLE_NFSE_PRODUCTION,restrictedTransmissionEnabled:process.env.ENABLE_NFSE_RESTRICTED_TRANSMISSION}):undefined;
     const invoiceEnvironment=nationalEnvironment?.environment??"PRODUCTION_RESTRICTED";
     if(!effective.ibsCbs&&ibsCbsObrigatorio(invoiceEnvironment,effective.serviceDate))throw new SafeFiscalError("IBS_CBS_REQUIRED","Esta competência exige as informações de IBS/CBS. Informe-as no passo Serviço.");
     // Substituição: a original tem de ser uma NFS-e gerada desta empresa, no mesmo ambiente, sem outra substituta em andamento.
@@ -143,7 +151,7 @@ export async function POST(request:Request){
     }
 
     stage="FISCAL_RESOLUTION";
-    const fiscal=await resolveFiscalConfiguration({organizationId:session.organizationId,municipalityCode:organization.municipality_code,nationalTaxCode:service.national_tax_code,municipalServiceCode:service.municipal_service_code,dpsMunicipalTaxCode:service.dps_municipal_tax_code,nbsCode:service.nbs_code,issTaxation:service.iss_taxation,issRateSource:service.iss_rate_source,fiscalReference:service.fiscal_reference,taxRegime:profile.tax_regime,reviewedAt:profile.reviewed_at,serviceDate:effective.serviceDate,dpsConfiguration:profile.dps_configuration,...(session.actorType==="OFFICE"&&requested.manualIssRateBasisPoints!==undefined&&requested.manualIssRateSourceNote?{manualRateBasisPoints:requested.manualIssRateBasisPoints,manualRateSourceNote:requested.manualIssRateSourceNote}:{})});
+    const fiscal=await resolveFiscalConfiguration({organizationId:session.organizationId,municipalityCode:organization.municipality_code,nationalTaxCode:service.national_tax_code,municipalServiceCode:service.municipal_service_code,dpsMunicipalTaxCode:service.dps_municipal_tax_code,nbsCode:service.nbs_code,issTaxation:service.iss_taxation,issRateSource:service.iss_rate_source,fiscalReference:service.fiscal_reference,taxRegime:profile.tax_regime,reviewedAt:profile.reviewed_at,automaticProfile:fiscalAccepted&&fiscalReadiness.status==="AUTOMATIC",automaticService:automaticService&&!requireOfficeReview,serviceDate:effective.serviceDate,dpsConfiguration:profile.dps_configuration,...(session.actorType==="OFFICE"&&requested.manualIssRateBasisPoints!==undefined&&requested.manualIssRateSourceNote?{manualRateBasisPoints:requested.manualIssRateBasisPoints,manualRateSourceNote:requested.manualIssRateSourceNote}:{})});
     let invoice=existing;
     let dpsNumber=existing?.dps_number;
     if(!invoice){stage="RESERVE_DPS";dpsNumber=await reserveDpsNumber(authenticatedClient,{organizationId:session.organizationId,series:"00001",environment:invoiceEnvironment});}

@@ -8,12 +8,14 @@ import { ClientAccessManager } from "@/components/client-access-manager";
 import { MunicipalRegistrationForm } from "@/components/municipal-registration-form";
 import { DeleteOrganizationButton } from "@/components/delete-organization-button";
 import { EmissionBlockToggle } from "@/components/emission-block-toggle";
+import { OfficeReviewToggle } from "@/components/office-review-toggle";
 import { EmissionPreflight } from "@/components/emission-preflight";
 import { IssueForm, type IssueCustomer, type IssueService } from "@/components/issue-form";
 import { StatusBadge, formatDate, formatTaxId } from "@/components/ui-kit";
 import { requireOfficeDataClient, requireOfficeSession } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getFiscalConfigurationReadiness } from "@/lib/nfse/fiscal-configuration";
+import { getFiscalConfigurationReadiness, isFiscalProfileAccepted } from "@/lib/nfse/fiscal-configuration";
+import { isAdnAutomaticService } from "@/lib/services/automatic-service";
 import { getServiceReadiness } from "@/lib/nfse/service-readiness";
 import { getCertificateReadiness } from "@/lib/nfse/certificate/status";
 import { createClientAccessService } from "@/lib/auth/client-access-service";
@@ -45,9 +47,9 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
   const canRunEmissionPreflight = can(officeSession.role, "invoice:issue");
   const canDeleteCompany = can(officeSession.role, "company:write");
   const [companyResult, servicesResult, taxProfileResult, catalogResult, customersResult, certificateResult, clientAccessResult, lastInvoiceResult] = await Promise.all([
-    db.from("organizations").select("id,legal_name,trade_name,tax_id,municipality_code,status,emission_blocked,municipal_registration,street,address_number,address_complement,neighborhood,state,postal_code,email,phone").eq("id", id).maybeSingle(),
-    needsServices ? createAdminClient().from("service_templates").select("id,name,default_description,active,workflow_status,created_via,client_service_location,client_note,needs_info_message,submitted_at,review_note,updated_at,national_service_code_id,national_tax_code,municipal_service_code,municipal_service_mapping_id,dps_municipal_tax_code,dps_municipal_tax_code_source,service_location_municipality_code,nbs_code,iss_taxation,iss_rate_source,fiscal_reference,reviewed_at,reviewed_by,national_service_codes(display_code,description)").eq("organization_id", id).order("updated_at", { ascending: false }) : Promise.resolve({ data: [] }),
-    needsFiscal ? db.from("tax_profiles").select("tax_regime,dps_configuration,reviewed_at,reviewed_by").eq("organization_id", id).maybeSingle() : Promise.resolve({ data: null }),
+    db.from("organizations").select("id,legal_name,trade_name,tax_id,municipality_code,status,emission_blocked,require_office_review,municipal_registration,street,address_number,address_complement,neighborhood,state,postal_code,email,phone").eq("id", id).maybeSingle(),
+    needsServices ? createAdminClient().from("service_templates").select("id,name,auto_ready_source,default_description,active,workflow_status,created_via,client_service_location,client_note,needs_info_message,submitted_at,review_note,updated_at,national_service_code_id,national_tax_code,municipal_service_code,municipal_service_mapping_id,dps_municipal_tax_code,dps_municipal_tax_code_source,service_location_municipality_code,nbs_code,iss_taxation,iss_rate_source,fiscal_reference,reviewed_at,reviewed_by,national_service_codes(display_code,description)").eq("organization_id", id).order("updated_at", { ascending: false }) : Promise.resolve({ data: [] }),
+    needsFiscal ? db.from("tax_profiles").select("tax_regime,dps_configuration,reviewed_at,reviewed_by,origin").eq("organization_id", id).maybeSingle() : Promise.resolve({ data: null }),
     tab === "services" ? db.from("national_service_codes").select("id", { count: "exact", head: true }) : Promise.resolve({ count: 0 }),
     tab === "issue" || isOverview ? db.from("customers").select("id,legal_name,tax_id").eq("organization_id", id).order("legal_name") : Promise.resolve({ data: [] }),
     needsCertificate && canReadCertificate ? db.from("digital_certificates").select("id,subject,issuer,serial,owner_tax_id,valid_from,valid_until,status,created_at").eq("organization_id", id).is("replaced_at", null).maybeSingle() : Promise.resolve({ data: null }),
@@ -60,11 +62,13 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
   const fiscalReadiness = getFiscalConfigurationReadiness(taxProfileResult.data);
   const certificateReadiness = getCertificateReadiness({ certificate: certificateResult.data, organizationTaxId: company.tax_id });
   const serviceDtos = services.map((item) => ({ ...item, national_service_codes: item.national_service_codes?.[0] ?? null })) as ManagedService[];
-  const readyServices = serviceDtos.filter((service) => getServiceReadiness(service).ready);
+  const requireOfficeReview = Boolean(company.require_office_review);
+  const readyServices = serviceDtos.filter((service) => getServiceReadiness(service).ready && !(requireOfficeReview && isAdnAutomaticService(service as ManagedService & { auto_ready_source?: string | null })));
+  const fiscalAccepted = isFiscalProfileAccepted(fiscalReadiness.status, requireOfficeReview);
   const organizationReadiness = getOrganizationReadiness({
     registration: { municipalRegistration: company.municipal_registration, street: company.street, addressNumber: company.address_number, neighborhood: company.neighborhood, state: company.state },
-    fiscal: { ready: fiscalReadiness.status === "REVIEWED", message: fiscalReadiness.status === "REVIEWED" ? "Configuração fiscal revisada." : "Configuração fiscal requer revisão." },
-    services: { ready: readyServices.length > 0, message: readyServices.length > 0 ? `${readyServices.length} serviço(s) apto(s).` : "Nenhum serviço ativo e revisado." },
+    fiscal: { ready: fiscalAccepted, message: fiscalReadiness.status === "REVIEWED" ? "Configuração fiscal revisada." : fiscalAccepted ? "Configuração fiscal automática (consulta de CNPJ na Receita)." : fiscalReadiness.status === "AUTOMATIC" ? "Configuração fiscal automática: revise para emitir (a empresa exige revisão)." : "Configuração fiscal requer revisão." },
+    services: { ready: !requireOfficeReview || readyServices.length > 0, message: readyServices.length > 0 ? `${readyServices.length} serviço(s) apto(s).` : requireOfficeReview ? "Nenhum serviço ativo e revisado." : "Lista nacional no passo 2: o serviço é montado na primeira emissão." },
     certificate: { ready: certificateReadiness.ready, message: certificateReadiness.message, warning: certificateReadiness.warning ? certificateReadiness.message : undefined },
     clientAccess: clientAccessResult?.readiness ?? { ready: false, message: "Acesso do cliente não cadastrado." },
   });
@@ -82,6 +86,7 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
     {tab === "overview" ? <div className="v2-company-overview">
       <div><section className="v2-panel v2-readiness-panel">
         <div className="v2-panel-heading"><div><h2>Prontidão para emissão</h2><p>Requisitos administrativos e fiscais desta empresa.</p></div><StatusBadge tone={organizationReadiness.overallReady ? "success" : "warning"}>{organizationReadiness.overallReady ? "Completa" : `${pendingItems.length} pendência(s)`}</StatusBadge></div>
+        <OfficeReviewToggle organizationId={id} required={requireOfficeReview} canChange={canDeleteCompany} />
         <div className="v2-readiness-list">{organizationReadiness.items.map((item) => <div key={item.key} className={item.ready ? "is-ready" : "is-pending"}>
           <span className="v2-readiness-icon">{item.ready ? <Check size={18} /> : <AlertTriangle size={17} />}</span>
           <span><strong>{readinessLabels[item.key]}</strong><small>{item.warning ?? item.message}</small></span>

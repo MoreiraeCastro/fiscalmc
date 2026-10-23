@@ -7,7 +7,7 @@ import type { FiscalConfigurationForm as FiscalForm,FiscalConfigurationStatus,Fi
 import { apiUrl } from "@/lib/base-path";
 
 type Configuration={status:FiscalConfigurationStatus;missing:string[];form:FiscalForm;technical:FiscalTechnicalConfiguration|null;reviewedAt:string|null;reviewedBy:string|null};
-const statusLabel:Record<FiscalConfigurationStatus,string>={DRAFT:"Rascunho",PENDING_REVIEW:"Pendente de revisão",REVIEWED:"Revisada",INVALID:"Inválida"};
+const statusLabel:Record<FiscalConfigurationStatus,string>={DRAFT:"Rascunho",PENDING_REVIEW:"Pendente de revisão",REVIEWED:"Revisada",AUTOMATIC:"Automática (consulta de CNPJ)",INVALID:"Inválida"};
 const choices=[{value:"PENDING_REVIEW",label:"Pendente de revisão"},{value:"CONFIGURED",label:"Configurado"},{value:"NOT_APPLICABLE",label:"Não se aplica"}] as const;
 
 export function FiscalConfigurationForm({organizationId,initialConfiguration}:{organizationId:string;initialConfiguration:Configuration}){

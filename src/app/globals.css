@@ -375,6 +375,10 @@ textarea.input { min-height:108px; padding-top:14px; resize:vertical; }
 .v2-tabs a.active { color:var(--orange-dark); border-color:var(--orange); }
 .v2-company-overview { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(280px,.72fr); gap:18px; align-items:start; }
 .v2-readiness-list { display:grid; }
+.office-review-toggle { margin:0 0 12px; padding:12px 14px; border:1px solid var(--border, #dfe5ec); border-radius:10px; }
+.office-review-toggle label { display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
+.office-review-toggle input { margin-top:3px; }
+.office-review-toggle small { display:block; margin-top:2px; color:var(--muted, #5b6b7b); font-weight:400; }
 .v2-readiness-list > div { min-height:74px; padding:14px 20px; display:grid; grid-template-columns:38px minmax(0,1fr) auto 72px; gap:13px; align-items:center; border-bottom:1px solid var(--border); }
 .v2-readiness-list > div:last-child { border:0; }
 .v2-readiness-icon { width:34px; height:34px; display:grid; place-items:center; border:1px solid var(--border); border-radius:50%; }

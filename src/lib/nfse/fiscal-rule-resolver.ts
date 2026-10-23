@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SafeFiscalError } from "./errors";
-import { MunicipalParametersProvider,issPercentToBasisPoints,parseMunicipalServiceCode } from "./municipal-parameters/client";
+import { MunicipalParametersProvider,issPercentToBasisPoints,parseMunicipalServiceCode,type MunicipalRetentions } from "./municipal-parameters/client";
 import { MtlsHttpClient } from "./client/mtls-http-client";
 import { OrganizationCertificateProvider } from "./certificate/organization-provider";
 import { issRateSourceSchema, matchesAcceptedProductionDpsReference, type IssRateSource } from "./service-fiscal-reference";
@@ -10,11 +10,11 @@ import { issuerMunicipalRegistrationEmissionSchema } from "./fiscal-configuratio
 
 const dpsTaxConfigurationSchema=z.object({iss:z.object({withholdingType:z.enum(["1","2","3"]),benefitNumber:z.string().min(1).optional()}),regime:z.object({simpleNational:z.enum(["1","2","3"]),simpleAssessment:z.enum(["1","2","3"]).optional(),special:z.enum(["0","1","2","3","4","5","6","9"])}),totalTaxes:z.object({indicator:z.literal("0")}),issuerMunicipalRegistrationEmission:issuerMunicipalRegistrationEmissionSchema.optional()});
 const storedDpsTaxConfigurationSchema=z.union([dpsTaxConfigurationSchema,z.object({version:z.literal(1),form:z.unknown(),technical:dpsTaxConfigurationSchema.optional()})]);
-export type FiscalResolutionInput={organizationId?:string;municipalityCode:string;nationalTaxCode:string;municipalServiceCode?:string|null;dpsMunicipalTaxCode?:string|null;nbsCode?:string|null;issTaxation?:"1"|"2"|"3"|"4"|null;issRateSource?:IssRateSource|null;fiscalReference?:unknown;taxRegime:"SIMPLES_NACIONAL"|"LUCRO_PRESUMIDO"|"LUCRO_REAL";reviewedAt?:string|null;serviceDate:string;dpsConfiguration:unknown;manualRateBasisPoints?:number;manualRateSourceNote?:string};
-export type FiscalResolution={municipalityCode:string;nationalTaxCode:string;municipalServiceCode?:string;iss:{taxation:"1"|"2"|"3"|"4";rateBasisPoints?:number;rateSource:IssRateSource;withholdingType:"1"|"2"|"3";source:"MUNICIPAL_INTEGRATION"|"ACCEPTED_PRODUCTION_DPS"|"OFFICE_PARAMETER"};retention:{officialRulesChecked:boolean};dpsConfiguration:z.infer<typeof dpsTaxConfigurationSchema>;issuerMunicipalRegistrationEmission:"SEND"|"OMIT";source:"MUNICIPAL_PARAMETERS"|"ACCEPTED_PRODUCTION_DPS"|"OFFICE_PARAMETER";validity:{validFrom:string;validUntil?:string};manualRateSourceNote?:string};
+export type FiscalResolutionInput={organizationId?:string;municipalityCode:string;nationalTaxCode:string;municipalServiceCode?:string|null;dpsMunicipalTaxCode?:string|null;nbsCode?:string|null;issTaxation?:"1"|"2"|"3"|"4"|null;issRateSource?:IssRateSource|null;fiscalReference?:unknown;taxRegime:"SIMPLES_NACIONAL"|"LUCRO_PRESUMIDO"|"LUCRO_REAL"|null;reviewedAt?:string|null;/** Perfil automático aceito (empresa sem exigência de revisão): vale no lugar de reviewedAt. */automaticProfile?:boolean;/** Serviço automático do ADN (passo 2 com a lista nacional): PARAMETRIZED sem nota de referência, conferido nos parâmetros do município. */automaticService?:boolean;serviceDate:string;dpsConfiguration:unknown;manualRateBasisPoints?:number;manualRateSourceNote?:string};
+export type FiscalResolution={municipalityCode:string;nationalTaxCode:string;municipalServiceCode?:string;iss:{taxation:"1"|"2"|"3"|"4";rateBasisPoints?:number;/** Só para a prévia: a alíquota que o município parametrizou, quando a DPS sai sem pAliq. */parametrizedRateBasisPoints?:number;rateSource:IssRateSource;withholdingType:"1"|"2"|"3";source:"MUNICIPAL_INTEGRATION"|"ACCEPTED_PRODUCTION_DPS"|"OFFICE_PARAMETER"};retention:{officialRulesChecked:boolean};dpsConfiguration:z.infer<typeof dpsTaxConfigurationSchema>;issuerMunicipalRegistrationEmission:"SEND"|"OMIT";source:"MUNICIPAL_PARAMETERS"|"ACCEPTED_PRODUCTION_DPS"|"OFFICE_PARAMETER";validity:{validFrom:string;validUntil?:string};manualRateSourceNote?:string};
 
 export async function resolveFiscalConfiguration(input:FiscalResolutionInput):Promise<FiscalResolution>{
-  if(!input.reviewedAt)throw incomplete();
+  if(!input.reviewedAt&&!input.automaticProfile)throw incomplete();
   let dpsConfiguration:z.infer<typeof dpsTaxConfigurationSchema>;
   try{const stored=storedDpsTaxConfigurationSchema.parse(input.dpsConfiguration);dpsConfiguration="version" in stored?(stored.technical??(() => {throw new Error("TECHNICAL_CONFIGURATION_PENDING");})()):stored;}
   catch{throw incomplete();}
@@ -27,6 +27,18 @@ export async function resolveFiscalConfiguration(input:FiscalResolutionInput):Pr
   // lookup key for taxable operations) is not required in this case.
   if(input.issTaxation==="3"||input.issTaxation==="4"){
     return{municipalityCode:input.municipalityCode,nationalTaxCode:input.nationalTaxCode,iss:{taxation:input.issTaxation,rateSource:issRateSource,withholdingType:dpsConfiguration.iss.withholdingType,source:"MUNICIPAL_INTEGRATION",...(issRateSource==="EMITTER_PROVIDED"?{rateBasisPoints:0}:{})},retention:{officialRulesChecked:false},dpsConfiguration,issuerMunicipalRegistrationEmission,source:"MUNICIPAL_PARAMETERS",validity:{validFrom:input.serviceDate}};
+  }
+  if(issRateSource==="PARAMETRIZED_BY_NATIONAL"&&input.automaticService&&!input.fiscalReference){
+    // Como o Emissor Nacional: a DPS sai sem pAliq e a Receita aplica a alíquota do município. Antes, confere nos parâmetros do
+    // município que o código existe, tem incidência e não tem retenção obrigatória (o portal ainda não pergunta pela retenção).
+    if(!input.municipalServiceCode)throw incomplete();
+    const serviceCode=parseMunicipalServiceCode(input.municipalServiceCode);
+    const provider=new MunicipalParametersProvider(new MtlsHttpClient(new OrganizationCertificateProvider()),undefined,input.organizationId);
+    const[rule,retentions]=await Promise.all([cachedRule(input.municipalityCode,serviceCode,input.serviceDate),provider.getRetentions({municipalityCode:input.municipalityCode,competence:input.serviceDate})]);
+    const current=rule??await fetchRule(input.municipalityCode,serviceCode,input.serviceDate,provider);
+    if(current.incidence!=="SIM"||current.iss_rate_percent===null)throw incomplete();
+    if(requiresMunicipalRetention(retentions,serviceCode,input.serviceDate))throw new SafeFiscalError("MUNICIPAL_RETENTION_REQUIRED","Neste município o ISS deste serviço é retido pelo tomador. Peça ao escritório para configurar este serviço antes de emitir.");
+    return{municipalityCode:input.municipalityCode,nationalTaxCode:input.nationalTaxCode,municipalServiceCode:serviceCode,iss:{taxation:input.issTaxation,parametrizedRateBasisPoints:issPercentToBasisPoints(Number(current.iss_rate_percent)),rateSource:issRateSource,withholdingType:dpsConfiguration.iss.withholdingType,source:"MUNICIPAL_INTEGRATION"},retention:{officialRulesChecked:true},dpsConfiguration,issuerMunicipalRegistrationEmission,source:"MUNICIPAL_PARAMETERS",validity:{validFrom:current.valid_from,...(current.valid_until?{validUntil:current.valid_until}:{})}};
   }
   if(issRateSource==="PARAMETRIZED_BY_NATIONAL"){
     if(!input.dpsMunicipalTaxCode||!matchesAcceptedProductionDpsReference(input.fiscalReference,{nationalTaxCode:input.nationalTaxCode,municipalTaxCode:input.dpsMunicipalTaxCode,nbsCode:input.nbsCode}))throw incomplete();
@@ -42,8 +54,7 @@ export async function resolveFiscalConfiguration(input:FiscalResolutionInput):Pr
     return{municipalityCode:input.municipalityCode,nationalTaxCode:input.nationalTaxCode,iss:{taxation:input.issTaxation,rateBasisPoints:input.manualRateBasisPoints,rateSource:issRateSource,withholdingType:dpsConfiguration.iss.withholdingType,source:"OFFICE_PARAMETER"},retention:{officialRulesChecked:false},dpsConfiguration,issuerMunicipalRegistrationEmission,source:"OFFICE_PARAMETER",validity:{validFrom:input.serviceDate},manualRateSourceNote:input.manualRateSourceNote.trim()};
   }
   const serviceCode=parseMunicipalServiceCode(input.municipalServiceCode);
-  const admin=createAdminClient();
-  const{data:cached}=await admin.from("municipal_tax_rules").select("incidence,iss_rate_percent,valid_from,valid_until").eq("municipality_code",input.municipalityCode).eq("service_code",serviceCode).lte("valid_from",`${input.serviceDate}T23:59:59Z`).or(`valid_until.is.null,valid_until.gte.${input.serviceDate}T00:00:00Z`).order("valid_from",{ascending:false}).limit(1).maybeSingle();
+  const cached=await cachedRule(input.municipalityCode,serviceCode,input.serviceDate);
   // Real organizations never fall back to NFSE_CERT_PATH. Local smoke tests omit organizationId explicitly.
   const provider=input.organizationId?new MunicipalParametersProvider(new MtlsHttpClient(new OrganizationCertificateProvider()),undefined,input.organizationId):new MunicipalParametersProvider();
   const rule=cached??await fetchRule(input.municipalityCode,serviceCode,input.serviceDate,provider);
@@ -54,6 +65,18 @@ export async function resolveFiscalConfiguration(input:FiscalResolutionInput):Pr
   ]);
   if(rule.incidence!=="SIM"||rule.iss_rate_percent===null)throw incomplete();
   return{municipalityCode:input.municipalityCode,nationalTaxCode:input.nationalTaxCode,municipalServiceCode:serviceCode,iss:{taxation:input.issTaxation,rateBasisPoints:issPercentToBasisPoints(Number(rule.iss_rate_percent)),rateSource:issRateSource,withholdingType:dpsConfiguration.iss.withholdingType,source:"MUNICIPAL_INTEGRATION"},retention:{officialRulesChecked:true},dpsConfiguration,issuerMunicipalRegistrationEmission,source:"MUNICIPAL_PARAMETERS",validity:{validFrom:rule.valid_from,...(rule.valid_until?{validUntil:rule.valid_until}:{})}};
+}
+
+async function cachedRule(municipalityCode:string,serviceCode:string,serviceDate:string){
+  const{data}=await createAdminClient().from("municipal_tax_rules").select("incidence,iss_rate_percent,valid_from,valid_until").eq("municipality_code",municipalityCode).eq("service_code",serviceCode).lte("valid_from",`${serviceDate}T23:59:59Z`).or(`valid_until.is.null,valid_until.gte.${serviceDate}T00:00:00Z`).order("valid_from",{ascending:false}).limit(1).maybeSingle();
+  return data;
+}
+
+/** Retenção municipal obrigatória vigente para o código completo na competência (lista de retenções do município no ADN). */
+export function requiresMunicipalRetention(retentions:MunicipalRetentions,serviceCode:string,competence:string){
+  const vigente=(inicio:string,fim:string|null)=>inicio.slice(0,10)<=competence&&(!fim||fim.slice(0,10)>=competence);
+  return(retentions.retencoes.retencoesMunicipais??[]).some(regra=>vigente(regra.dataInicioVigencia,regra.dataFimVigencia)
+    &&(regra.servicos??[]).some(servico=>servico.codigoCompleto===serviceCode&&(servico.historico??[{dataInicioVigencia:regra.dataInicioVigencia,dataFimVigencia:regra.dataFimVigencia}]).some(h=>vigente(h.dataInicioVigencia,h.dataFimVigencia))));
 }
 
 function incomplete(){return new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","Uma configuração fiscal desta empresa precisa ser revisada pelo escritório antes da emissão.");}

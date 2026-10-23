@@ -7,14 +7,18 @@ import { DESCRICAO_MAX, INFO_COMPLEMENTAR_MAX, MECANISMO_PRESTADOR, MECANISMO_TO
 import { Cartao } from "./portal-shell";
 import { Campo, FaixaValidacao, Leitura, Rodape } from "./campos";
 import { CamposIbsCbs } from "./campos-ibs-cbs";
+import { SeletorServicoNacional, type CodigoNacionalOpcao, type ServicoUsado } from "./seletor-servico-nacional";
 
 export type ServicoOpcao = { id: string; nome: string; codigo: string | null; descricaoCodigo: string | null; nbs: string | null; municipioPrestacao: string; descricaoPadrao: string | null };
+/** "Subiu o A1, está pronto": o passo 2 usa a lista nacional completa em vez dos serviços liberados pelo escritório. */
+export type ModoNacional = { catalogo: CodigoNacionalOpcao[]; usados: ServicoUsado[]; competencia: string; municipio: string };
 
-export function FormServico({ rascunhoId, servicos, inicial, escritorio, empresaId, ibsCbs, complemento, comercioExterior }: { rascunhoId: string; servicos: ServicoOpcao[]; inicial: { modeloId: string; descricao: string }; escritorio: boolean; empresaId: string; ibsCbs: IbsCbsRascunho | null; complemento: ComplementoRascunho | null; /** null = tomador no Brasil (sem o grupo); objeto vazio = exterior ainda sem dados. */ comercioExterior: Partial<ComercioExteriorRascunho> | null }) {
+export function FormServico({ rascunhoId, servicos, nacional, inicial, escritorio, empresaId, ibsCbs, complemento, comercioExterior }: { rascunhoId: string; servicos: ServicoOpcao[]; nacional: ModoNacional | null; inicial: { modeloId: string; descricao: string }; escritorio: boolean; empresaId: string; ibsCbs: IbsCbsRascunho | null; complemento: ComplementoRascunho | null; /** null = tomador no Brasil (sem o grupo); objeto vazio = exterior ainda sem dados. */ comercioExterior: Partial<ComercioExteriorRascunho> | null }) {
   const [estado, enviar, salvando] = useActionState<EstadoPasso, FormData>(salvarServico.bind(null, rascunhoId), { erros: {} });
   const [modeloId, setModeloId] = useState(inicial.modeloId || (servicos.length === 1 ? servicos[0].id : ""));
   const [descricao, setDescricao] = useState(inicial.descricao || (servicos.length === 1 ? servicos[0].descricaoPadrao ?? "" : ""));
   const [busca, setBusca] = useState("");
+  const [descricaoPadrao, setDescricaoPadrao] = useState(servicos.find((item) => item.id === inicial.modeloId)?.descricaoPadrao ?? "");
   const servico = servicos.find((item) => item.id === modeloId);
   const visiveis = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase("pt-BR");
@@ -31,7 +35,12 @@ export function FormServico({ rascunhoId, servicos, inicial, escritorio, empresa
     if (proximo?.descricaoPadrao && (!descricao.trim() || descricao === anterior?.descricaoPadrao)) setDescricao(proximo.descricaoPadrao);
   }
 
-  if (!servicos.length) return <Cartao titulo="Serviço/Fornecimento prestado">
+  function trocarDescricaoPadrao(nova: string) {
+    if (!descricao.trim() || descricao === descricaoPadrao) setDescricao(nova);
+    setDescricaoPadrao(nova);
+  }
+
+  if (!servicos.length && !nacional) return <Cartao titulo="Serviço/Fornecimento prestado">
     <div className="pc-aviso alerta">Esta empresa ainda não tem serviço pronto para emissão. {escritorio ? <>Configure em <Link className="pc-link" href={`/admin/empresas/${empresaId}?tab=services`}>Serviços da empresa</Link>.</> : "Peça ao escritório para liberar o serviço."}</div>
   </Cartao>;
 
@@ -40,10 +49,12 @@ export function FormServico({ rascunhoId, servicos, inicial, escritorio, empresa
     <Cartao titulo="Local da prestação do serviço">
       <div className="pc-grade">
         <Leitura rotulo="País" valor="Brasil" largura="terco" />
-        <Leitura rotulo="Município" valor={servico?.municipioPrestacao ?? "Conforme o serviço escolhido"} largura="meia" />
+        <Leitura rotulo="Município" valor={nacional ? servico?.municipioPrestacao ?? nacional.municipio : servico?.municipioPrestacao ?? "Conforme o serviço escolhido"} largura="meia" />
       </div>
     </Cartao>
     <Cartao titulo="Serviço/Fornecimento prestado">
+      {nacional ? <SeletorServicoNacional catalogo={nacional.catalogo} usados={nacional.usados} competencia={nacional.competencia} erros={erros}
+        inicial={nacional.usados.find((item) => item.id === inicial.modeloId) ?? null} aoEscolherCodigo={trocarDescricaoPadrao} /> : <>
       <input type="hidden" name="servico" value={modeloId} />
       <Campo rotulo="Código de Tributação Nacional" obrigatorio erro={erros.servico} dica="Serviços revisados pelo escritório para esta empresa." id="busca-servico">
         {servicos.length > 6 ? <input id="busca-servico" className="pc-input" placeholder="Pesquisar código ou descrição" value={busca} onChange={(e) => setBusca(e.target.value)} /> : null}
@@ -58,7 +69,7 @@ export function FormServico({ rascunhoId, servicos, inicial, escritorio, empresa
       {servico ? <div className="pc-grade">
         <Leitura rotulo="O serviço é caso de imunidade, exportação ou não incidência do ISSQN?" valor="Conforme a configuração do serviço" largura="meia" />
         <Leitura rotulo="Item da NBS correspondente" valor={servico.nbs} largura="meia" />
-      </div> : null}
+      </div> : null}</>}
       <Campo rotulo="Descrição do Serviço/Fornecimento" obrigatorio erro={erros.descricao} id="descricao" largura="inteira">
         <textarea id="descricao" name="descricao" rows={6} maxLength={DESCRICAO_MAX} value={descricao} onChange={(e) => setDescricao(e.target.value)} />
         <small className="pc-contador">Total de caracteres: {descricao.length} / {DESCRICAO_MAX}</small>

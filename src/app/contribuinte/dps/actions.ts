@@ -8,7 +8,11 @@ import { ibsCbsObrigatorio } from "@/lib/nfse/ibs-cbs";
 import indicadores from "@/lib/contribuinte/indicadores-operacao.json";
 import paises from "@/lib/contribuinte/paises.json";
 import { centavosParaTexto, validarComercioExterior, validarComplemento, validarIbsCbs, validarIntermediario, validarMotivoSubstituicao, validarNovoTomador, validarPessoas, validarServico, validarTomadorExterior, validarValores, type Erros, type IntermediarioRascunho, type TomadorRascunho } from "@/lib/contribuinte/dps";
-import { servicosProntos, tomadorPorId, tomadoresSalvos, type TomadorSalvo } from "@/lib/contribuinte/emissao";
+import { modoEmissao, servicosProntos, tomadorPorId, tomadoresSalvos, type TomadorSalvo } from "@/lib/contribuinte/emissao";
+import { discoverMunicipalServiceCodes, type MunicipalServiceOption } from "@/lib/nfse/municipal-parameters/discovery";
+import { nbsForLc116, searchNbsCatalog, type NbsCandidate } from "@/lib/organizations/nbs-activity-resolver";
+import { ensureAutomaticService } from "@/lib/services/automatic-service";
+import { SafeFiscalError } from "@/lib/nfse/errors";
 import { carregarRascunho, excluirRascunho, gravarRascunho, registrarResultado } from "@/lib/contribuinte/rascunhos";
 import { lookupCnpj, type CnpjLookupCustomer } from "@/lib/nfse/cnpj-lookup";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -35,6 +39,39 @@ export async function consultarTomador(documento: string): Promise<ConsultaTomad
   if (doc.length === 11) return {};
   const consulta = await lookupCnpj(doc);
   return consulta.ok ? { receita: consulta.customer } : { erro: consulta.error };
+}
+
+export type OpcoesDoCodigo = { opcoes?: MunicipalServiceOption[]; nbs?: NbsCandidate[]; existente?: { id: string; codigoMunicipal: string | null; nbs: string | null }; erro?: string };
+
+async function codigoDoCatalogo(id: string) {
+  const { data } = await createAdminClient().from("national_service_codes").select("id,code,item,subitem").eq("id", id).eq("active", true).maybeSingle();
+  return data;
+}
+
+/**
+ * Passo 2, ao escolher o "Código de Tributação Nacional": os códigos complementares do município (parâmetros do ADN, com a alíquota)
+ * e as NBS que correspondem ao código. Se o escritório já configurou um serviço para esse código, vale o dele.
+ */
+export async function opcoesDoCodigo(codigoNacionalId: string, competencia: string): Promise<OpcoesDoCodigo> {
+  const contexto = await empresaQueEmite();
+  if (!contexto) return { erro: SEM_PERMISSAO.mensagem };
+  if ((await modoEmissao(contexto.empresa.id)).exigeRevisao) return { erro: "Esta empresa só emite com serviços revisados pelo escritório." };
+  const catalogo = await codigoDoCatalogo(codigoNacionalId);
+  if (!catalogo) return { erro: "Código de tributação nacional não encontrado." };
+  const existente = (await servicosProntos(contexto.empresa.id)).find((item) => !item.automatico && item.codigoNacionalId === catalogo.id);
+  if (existente) return { existente: { id: existente.id, codigoMunicipal: existente.codigoMunicipal, nbs: existente.nbs } };
+  try {
+    const opcoes = await discoverMunicipalServiceCodes({ organizationId: contexto.empresa.id, municipalityCode: contexto.empresa.municipio, nationalTaxCode: catalogo.code, competence: /^\d{4}-\d{2}-\d{2}$/.test(competencia) ? competencia : hojeBrasilia() });
+    return { opcoes, nbs: nbsForLc116(catalogo.item, catalogo.subitem) };
+  } catch (error) {
+    return { erro: error instanceof SafeFiscalError ? error.safeMessage : "Não foi possível consultar os parâmetros do município agora." };
+  }
+}
+
+/** Busca livre na tabela NBS (o Emissor Nacional deixa escolher qualquer item, não só os correlacionados). */
+export async function buscarNbs(termo: string): Promise<NbsCandidate[]> {
+  await exigirEmpresa();
+  return searchNbsCatalog(termo, 40);
 }
 
 function texto(formData: FormData, campo: string) {
@@ -140,7 +177,15 @@ async function salvarTomadorExterior(contexto: NonNullable<Awaited<ReturnType<ty
 export async function salvarServico(rascunhoId: string, _anterior: EstadoPasso, formData: FormData): Promise<EstadoPasso> {
   const contexto = await empresaQueEmite();
   if (!contexto) return SEM_PERMISSAO;
-  const servico = validarServico({ modeloId: texto(formData, "servico"), descricao: texto(formData, "descricao") });
+  // Lista nacional: o serviço da empresa é montado (ou reaproveitado) a partir do código, do complemento municipal e da NBS escolhidos.
+  let modeloId = texto(formData, "servico");
+  const codigoNacionalId = texto(formData, "codigoNacional");
+  if (!modeloId && codigoNacionalId) {
+    const montado = await montarServicoAutomatico(contexto, rascunhoId, codigoNacionalId, texto(formData, "codigoMunicipal"), texto(formData, "nbs"));
+    if ("erros" in montado) return montado;
+    modeloId = montado.id;
+  }
+  const servico = validarServico({ modeloId, descricao: texto(formData, "descricao") });
   if (!servico.ok) return { erros: servico.erros };
   const servicos = await servicosProntos(contexto.empresa.id);
   if (!servicos.some((item) => item.id === servico.valor.modeloId)) return { erros: { servico: "Serviço indisponível para emissão" } };
@@ -159,6 +204,29 @@ export async function salvarServico(rascunhoId: string, _anterior: EstadoPasso, 
   const valores = rascunho?.dados.servico?.modeloId === servico.valor.modeloId ? rascunho.dados.valores : substituicao ? { valorCentavos: substituicao.valorCentavos } : undefined;
   await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: rascunhoId, passo: 3, dados: { servico: servico.valor, valores, complemento: complemento.ok ? complemento.valor : undefined, comercioExterior: comercio?.ok ? comercio.valor : undefined, ...(ibsCbs?.ok ? { ibsCbs: ibsCbs.valor } : {}) } });
   redirect(`/contribuinte/dps/${rascunhoId}/valores`);
+}
+
+async function montarServicoAutomatico(contexto: NonNullable<Awaited<ReturnType<typeof empresaQueEmite>>>, rascunhoId: string, codigoNacionalId: string, codigoMunicipal: string, nbs: string): Promise<{ id: string } | EstadoPasso> {
+  const erros: Erros = {};
+  if (!codigoMunicipal) erros.codigoMunicipal = "Campo obrigatório";
+  if (!nbs) erros.nbs = "Campo obrigatório";
+  if (Object.keys(erros).length) return { erros };
+  if ((await modoEmissao(contexto.empresa.id)).exigeRevisao) return { erros: { servico: "Esta empresa só emite com serviços revisados pelo escritório." } };
+  const catalogo = await codigoDoCatalogo(codigoNacionalId);
+  if (!catalogo) return { erros: { servico: "Código de tributação nacional não encontrado." } };
+  // Confere o complemento de novo no ADN (o formulário não é fonte de verdade); a consulta fica em cache por algumas horas.
+  const rascunho = await carregarRascunho(contexto.empresa.id, rascunhoId);
+  let opcoes: MunicipalServiceOption[];
+  try {
+    opcoes = await discoverMunicipalServiceCodes({ organizationId: contexto.empresa.id, municipalityCode: contexto.empresa.municipio, nationalTaxCode: catalogo.code, competence: rascunho?.dados.competencia ?? hojeBrasilia() });
+  } catch (error) {
+    return { erros: {}, mensagem: error instanceof SafeFiscalError ? error.safeMessage : "Não foi possível consultar os parâmetros do município agora." };
+  }
+  const opcao = opcoes.find((item) => item.code === codigoMunicipal);
+  if (!opcao) return { erros: { codigoMunicipal: "Código complementar indisponível neste município" } };
+  if (opcao.incidence !== "SIM") return { erros: { codigoMunicipal: "O município não cobra ISS neste código (sem incidência). Peça ao escritório para configurar." } };
+  const montado = await ensureAutomaticService({ db: createAdminClient(), organizationId: contexto.empresa.id, municipalityCode: contexto.empresa.municipio, nationalServiceCodeId: catalogo.id, municipalServiceCode: opcao.code, nbsCode: nbs, createdBy: contexto.usuarioId, actorType: contexto.escritorio ? "OFFICE" : "CLIENT" });
+  return montado.ok ? { id: montado.serviceId } : { erros: { servico: montado.erro } };
 }
 
 export async function salvarValores(rascunhoId: string, _anterior: EstadoPasso, formData: FormData): Promise<EstadoPasso> {

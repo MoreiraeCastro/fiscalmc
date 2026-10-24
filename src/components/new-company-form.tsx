@@ -39,11 +39,15 @@ export function NewCompanyForm({organizationId,initialValues,canWriteCertificate
   const[certError,setCertError]=useState("");
   const[certReading,setCertReading]=useState(false);
   const[withoutCertificate,setWithoutCertificate]=useState(!canWriteCertificate);
+  // "Subiu o A1, está pronto": depois de ler o A1 e consultar o CNPJ, mostra só um resumo; o formulário fica em "Editar dados".
+  const[editarDados,setEditarDados]=useState(false);
+  const[receita,setReceita]=useState<{municipalityName:string;simples:boolean|null;mei:boolean|null;situacao:string}|null>(null);
   const set=(field:keyof CompanyFormState,value:string)=>setForm(current=>({...current,[field]:value}));
-  async function readCertificate(){
-    if(!certFile||!certPassword){setCertError("Selecione o arquivo A1 e informe a senha.");return;}
+  async function readCertificate(file=certFile,password=certPassword){
+    if(!file||!password){setCertError("Selecione o arquivo A1 e informe a senha.");return;}
+    if(certReading)return;
     setCertReading(true);setCertError("");setCertInfo(null);
-    const body=new FormData();body.set("file",certFile);body.set("password",certPassword);
+    const body=new FormData();body.set("file",file);body.set("password",password);
     try{
       const response=await fetch(apiUrl("/api/admin/organizations/certificate-inspect"),{method:"POST",body});
       const data=await response.json().catch(()=>({}));
@@ -79,6 +83,7 @@ export function NewCompanyForm({organizationId,initialValues,canWriteCertificate
         cnaeFiscalDescription:found.cnaeFiscalDescription||current.cnaeFiscalDescription,
         cnaesSecundarios:found.cnaesSecundarios?.length?found.cnaesSecundarios:current.cnaesSecundarios,
       }));
+      setReceita({municipalityName:found.municipalityName??"",simples:found.simples??null,mei:found.mei??null,situacao:found.situacaoCadastral??""});
       setLookupNotice(found.situacaoCadastral&&found.situacaoCadastral!=="ATIVA"?`Atenção: situação cadastral "${found.situacaoCadastral}".`:"Dados preenchidos a partir do CNPJ. Revise antes de salvar.");
     }catch{setLookupNotice("Não foi possível consultar o CNPJ agora.");}
     finally{setLookingUp(false);}
@@ -116,15 +121,16 @@ export function NewCompanyForm({organizationId,initialValues,canWriteCertificate
         <div className="form-section-heading"><span className="form-section-icon"><KeyRound size={20}/></span><div><h2 id="company-certificate">Certificado digital A1</h2><p>Comece pelo A1 da empresa: ele preenche o CNPJ e já fica guardado no cofre, pronto para emitir. Arquivo e senha são tratados só no servidor.</p></div></div>
         {canWriteCertificate?<>
           {!withoutCertificate?<div className="company-form-grid">
-            <Field label="Arquivo A1 (.pfx ou .p12)" required htmlFor="cert-file" className="span-2"><input className="input" id="cert-file" type="file" accept=".pfx,.p12,application/x-pkcs12,application/octet-stream" onChange={event=>{setCertFile(event.target.files?.[0]??null);setCertInfo(null);}}/></Field>
-            <Field label="Senha do certificado" required htmlFor="cert-password"><input className="input" id="cert-password" type="password" autoComplete="new-password" value={certPassword} onChange={event=>{setCertPassword(event.target.value);setCertInfo(null);}}/></Field>
-            <Field label="&nbsp;" htmlFor="cert-read"><button className="button secondary" type="button" id="cert-read" disabled={certReading||!certFile||!certPassword} onClick={readCertificate}>{certReading?"Lendo…":"Ler certificado"}</button></Field>
+            <Field label="Arquivo A1 (.pfx ou .p12)" required htmlFor="cert-file" className="span-2"><input className="input" id="cert-file" type="file" accept=".pfx,.p12,application/x-pkcs12,application/octet-stream" onChange={event=>{const file=event.target.files?.[0]??null;setCertFile(file);setCertInfo(null);setReceita(null);if(file&&certPassword)void readCertificate(file,certPassword);}}/></Field>
+            <Field label="Senha do certificado" required htmlFor="cert-password"><input className="input" id="cert-password" type="password" autoComplete="new-password" value={certPassword} onChange={event=>{setCertPassword(event.target.value);setCertInfo(null);setReceita(null);}} onBlur={()=>{if(certFile&&certPassword&&!certInfo)void readCertificate();}} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();void readCertificate();}}}/></Field>
+            <Field label="&nbsp;" htmlFor="cert-read"><button className="button secondary" type="button" id="cert-read" disabled={certReading||!certFile||!certPassword} onClick={()=>void readCertificate()}>{certReading?"Lendo…":"Ler certificado"}</button></Field>
           </div>:null}
           {certError?<div className="alert error" role="alert"><CircleAlert size={18}/>{certError}</div>:null}
           {certInfo&&!withoutCertificate?<div className="alert success" role="status">Certificado válido até {new Intl.DateTimeFormat("pt-BR").format(new Date(certInfo.validUntil))} · {certInfo.holder} · CNPJ {formatCnpj(certInfo.taxId)}. Ele será gravado junto com o cadastro.</div>:null}
           <label className="checkbox-line"><input type="checkbox" checked={withoutCertificate} onChange={event=>setWithoutCertificate(event.target.checked)}/> Cadastrar a empresa sem certificado agora (enviar depois, na aba Certificado)</label>
         </>:<div className="alert" role="status">Somente superadministradores cadastram o certificado A1. A empresa será criada sem certificado; um superadministrador envia depois, na aba Certificado.</div>}
       </section>:null}
+      {creating&&!withoutCertificate&&Boolean(certInfo)&&Boolean(receita)&&!editarDados&&Boolean(form.legalName.trim())&&/^d{7}$/.test(digits(form.municipalityCode))?<ResumoCadastro form={form} receita={receita!} aviso={lookupNotice} onEditar={()=>setEditarDados(true)}/>:<>
       <section className="company-form-section" aria-labelledby="company-identification">
         <div className="form-section-heading"><span className="form-section-icon"><Building2 size={20}/></span><div><h2 id="company-identification">Identificação da empresa</h2><p>Use os dados cadastrais oficiais. Os campos marcados com * são necessários agora.</p></div></div>
         <div className="company-form-grid">
@@ -165,11 +171,31 @@ export function NewCompanyForm({organizationId,initialValues,canWriteCertificate
         </div>
       </section>
 
+      </>}
       {error&&<div className="alert error" role="alert"><CircleAlert size={18}/>{error}</div>}
       <div className="company-form-actions"><Link href="/admin/empresas" className="button secondary"><ChevronLeft size={18}/>Cancelar</Link><button className="button primary" disabled={saving}>{saving?<><LoaderCircle className="spin" size={18}/>Salvando cadastro…</>:organizationId?"Salvar dados cadastrais":"Cadastrar empresa"}</button></div>
     </form>
     <aside className="company-onboarding-aside"><div className="onboarding-note"><ShieldCheck size={22}/><h2>Com o A1, já emite</h2><p>{organizationId?"O cadastro vem da Receita. Mudar estes dados não altera o perfil fiscal nem os serviços da empresa.":"Basta o certificado A1. O regime (Simples, MEI ou não optante) vem da Receita e o serviço é escolhido na lista nacional na hora de emitir, como no Emissor Nacional."}</p></div><div className="onboarding-checklist"><h2>Opcional</h2><ol><li>Inscrição municipal: só se o município exigir na nota.</li><li>Acesso do cliente: só se ele for emitir pelo portal.</li><li>Chave “só serviços revisados”: para empresas em que o escritório quer conferir cada serviço.</li></ol></div></aside>
   </div>;
+}
+
+/** Resumo do que veio da Receita, no lugar do formulário inteiro: basta conferir e cadastrar. */
+function ResumoCadastro({form,receita,aviso,onEditar}:{form:CompanyFormState;receita:{municipalityName:string;simples:boolean|null;mei:boolean|null;situacao:string};aviso:string;onEditar:()=>void}){
+  const regime=receita.mei?"Simples Nacional - MEI":receita.simples?"Simples Nacional - ME/EPP":receita.simples===false?"Não optante pelo Simples":"Não informado pela Receita (configure depois na aba fiscal)";
+  const endereco=[form.street,form.addressNumber,form.addressComplement,form.neighborhood].filter(Boolean).join(", ");
+  return <section className="company-form-section company-summary" aria-labelledby="company-summary">
+    <div className="form-section-heading"><span className="form-section-icon"><Building2 size={20}/></span><div><h2 id="company-summary">{form.legalName}</h2><p>Dados da Receita. Confira e cadastre; dá para corrigir em “Editar dados”.</p></div></div>
+    <dl className="company-summary-list">
+      <div><dt>CNPJ</dt><dd>{form.taxId}</dd></div>
+      <div><dt>Município</dt><dd>{receita.municipalityName?`${receita.municipalityName} / ${form.state}`:form.municipalityCode} <small>IBGE {form.municipalityCode}</small></dd></div>
+      <div><dt>Regime</dt><dd>{regime}</dd></div>
+      <div><dt>Situação cadastral</dt><dd>{receita.situacao||"—"}</dd></div>
+      <div className="span-2"><dt>Endereço</dt><dd>{endereco||"—"}{form.postalCode?` · CEP ${form.postalCode}`:""}</dd></div>
+      {form.cnaeFiscalCode?<div className="span-2"><dt>Atividade principal</dt><dd>{form.cnaeFiscalCode} — {form.cnaeFiscalDescription}</dd></div>:null}
+    </dl>
+    {aviso&&aviso.startsWith("Atenção")?<div className="alert" role="status">{aviso}</div>:null}
+    <button type="button" className="button ghost" onClick={onEditar}>Editar dados</button>
+  </section>;
 }
 
 function Field({label,htmlFor,required,hint,className,children}:{label:string;htmlFor:string;required?:boolean;hint?:string;className?:string;children:React.ReactNode}){return <div className={`field company-field${className?` ${className}`:""}`}><label htmlFor={htmlFor}>{label}{required&&<span aria-hidden> *</span>}</label>{children}{hint&&<small className="field-hint">{hint}</small>}</div>;}

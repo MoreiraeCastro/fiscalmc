@@ -4,6 +4,7 @@ import { requireOfficeSession } from "@/lib/auth/session";
 import { can } from "@/lib/security/authorization";
 import { ClientAccessError, createClientAccessService } from "@/lib/auth/client-access-service";
 import { passwordConfirmationSchema } from "@/lib/auth/client-access-model";
+import { generateClientPassword } from "@/lib/auth/generated-password";
 
 export const runtime = "nodejs";
 
@@ -13,7 +14,11 @@ const patchSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("REACTIVATE") }),
   z.object({ action: z.literal("REPAIR"), password: z.string(), confirmPassword: z.string() }),
   z.object({ action: z.literal("RESET_PASSWORD"), password: z.string(), confirmPassword: z.string() }),
+  // "Gerar acesso": a senha é gerada aqui e devolvida uma única vez (generatedPassword).
+  z.object({ action: z.literal("REPAIR_GENERATED") }),
+  z.object({ action: z.literal("RESET_PASSWORD_GENERATED") }),
 ]);
+const createGeneratedSchema = z.object({ generate: z.literal(true) });
 
 function responseFor(error: unknown) {
   if (error instanceof z.ZodError) return NextResponse.json({ error: "Revise os dados informados." }, { status: 400 });
@@ -49,9 +54,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const session = await authorize("client-access:write");
     const { id } = await params;
     organizationIdSchema.parse(id);
-    const input = passwordConfirmationSchema.parse(await request.json());
-    const result = await createClientAccessService().create({ organizationId: id, password: input.password, actorUserId: session.userId });
-    return NextResponse.json(result, { status: 201 });
+    const body = await request.json();
+    const generated = createGeneratedSchema.safeParse(body).success ? generateClientPassword() : null;
+    const password = generated ?? passwordConfirmationSchema.parse(body).password;
+    const result = await createClientAccessService().create({ organizationId: id, password, actorUserId: session.userId });
+    return NextResponse.json({ ...result, ...(generated ? { generatedPassword: generated } : {}) }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof Error && ["FORBIDDEN_CLIENT_ACCESS", "FORBIDDEN_OFFICE", "UNAUTHENTICATED"].includes(error.message)) return NextResponse.json({ error: "Seu perfil não pode criar acessos." }, { status: 403 });
     return responseFor(error);
@@ -65,6 +72,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     organizationIdSchema.parse(id);
     const input = patchSchema.parse(await request.json());
     const service = createClientAccessService();
+    if (input.action === "REPAIR_GENERATED" || input.action === "RESET_PASSWORD_GENERATED") {
+      const generatedPassword = generateClientPassword();
+      const generatedResult = input.action === "REPAIR_GENERATED"
+        ? await service.repairInvalid({ organizationId: id, actorUserId: session.userId, password: generatedPassword })
+        : await service.resetPassword({ organizationId: id, actorUserId: session.userId, password: generatedPassword });
+      return NextResponse.json({ ...generatedResult, generatedPassword }, { headers: { "Cache-Control": "no-store" } });
+    }
     const result = input.action === "BLOCK"
       ? await service.block({ organizationId: id, actorUserId: session.userId })
       : input.action === "REACTIVATE"

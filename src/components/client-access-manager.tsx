@@ -1,27 +1,36 @@
 "use client";
 import { useState } from "react";
-import { KeyRound, LockKeyhole, RotateCcw, ShieldCheck, UserRoundPlus } from "lucide-react";
+import { Copy, KeyRound, LockKeyhole, RotateCcw, ShieldCheck, UserRoundPlus } from "lucide-react";
 import { apiUrl } from "@/lib/base-path";
 
 type Access = { cnpj: string; status: "ACTIVE" | "BLOCKED" | "INVALID"; createdAt: string; blockedAt: string | null };
 type AccessResult = { access: Access | null; readiness: { ready: boolean; status: string; message: string } };
+type Mode = "CREATE" | "RESET" | "REPAIR";
 
+/**
+ * Acesso do cliente ao portal (CNPJ + senha). "Gerar acesso" / "Gerar nova senha": o servidor cria uma senha forte e ela aparece
+ * uma única vez, com uma mensagem pronta para mandar ao cliente. Definir a senha à mão continua possível.
+ */
 export function ClientAccessManager({ organizationId, organizationTaxId, initial, canWrite }: { organizationId: string; organizationTaxId: string; initial: AccessResult; canWrite: boolean }) {
   const [result, setResult] = useState(initial);
-  const [mode, setMode] = useState<"CREATE" | "RESET" | "REPAIR" | null>(initial.access ? null : "CREATE");
+  const [manual, setManual] = useState<Mode | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [generated, setGenerated] = useState<string | null>(null);
+  const [copied, setCopied] = useState<"SENHA" | "MENSAGEM" | null>(null);
 
-  async function request(method: "POST" | "PATCH", body: Record<string, string>) {
-    setSaving(true); setError(null); setNotice(null);
+  async function request(method: "POST" | "PATCH", body: Record<string, string | boolean>) {
+    setSaving(true); setError(null); setNotice(null); setGenerated(null); setCopied(null);
     try {
       const response = await fetch(apiUrl(`/api/admin/organizations/${organizationId}/client-access`), { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const payload = await response.json() as AccessResult & { error?: string };
+      const payload = await response.json() as AccessResult & { error?: string; generatedPassword?: string };
       if (!response.ok) throw new Error(payload.error ?? "Não foi possível atualizar o acesso.");
-      setResult(payload); setPassword(""); setConfirmPassword(""); setMode(null);
+      const { generatedPassword, ...summary } = payload;
+      setResult(summary); setPassword(""); setConfirmPassword(""); setManual(null);
+      if (generatedPassword) setGenerated(generatedPassword);
       return true;
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Não foi possível atualizar o acesso.");
@@ -29,13 +38,18 @@ export function ClientAccessManager({ organizationId, organizationTaxId, initial
     } finally { setSaving(false); }
   }
 
-  async function submitPassword() {
+  async function generate(mode: Mode) {
+    if (mode === "RESET" && !window.confirm("Gerar uma nova senha? A senha atual do cliente deixa de funcionar.")) return;
+    const ok = mode === "CREATE" ? await request("POST", { generate: true }) : await request("PATCH", { action: mode === "REPAIR" ? "REPAIR_GENERATED" : "RESET_PASSWORD_GENERATED" });
+    if (ok) setNotice(mode === "CREATE" ? "Acesso criado." : mode === "REPAIR" ? "Acesso do cliente reparado." : "Nova senha gerada.");
+  }
+
+  async function submitManual() {
+    if (!manual) return;
     if (password.length < 8) { setError("A senha deve ter pelo menos 8 caracteres."); return; }
     if (password !== confirmPassword) { setError("As senhas não coincidem."); return; }
-    const created = mode === "CREATE";
-    const repaired = mode === "REPAIR";
-    const body: Record<string, string> = created ? { password, confirmPassword } : { action: repaired ? "REPAIR" : "RESET_PASSWORD", password, confirmPassword };
-    if (await request(created ? "POST" : "PATCH", body)) setNotice(created ? "Acesso criado com sucesso." : repaired ? "Acesso do cliente reparado com sucesso." : "Senha redefinida com sucesso.");
+    const body: Record<string, string> = manual === "CREATE" ? { password, confirmPassword } : { action: manual === "REPAIR" ? "REPAIR" : "RESET_PASSWORD", password, confirmPassword };
+    if (await request(manual === "CREATE" ? "POST" : "PATCH", body)) setNotice(manual === "CREATE" ? "Acesso criado com sucesso." : manual === "REPAIR" ? "Acesso do cliente reparado com sucesso." : "Senha redefinida com sucesso.");
   }
 
   async function changeState(action: "BLOCK" | "REACTIVATE") {
@@ -43,28 +57,47 @@ export function ClientAccessManager({ organizationId, organizationTaxId, initial
     if (await request("PATCH", { action })) setNotice(action === "BLOCK" ? "Acesso bloqueado." : "Acesso reativado.");
   }
 
+  async function copy(texto: string, qual: "SENHA" | "MENSAGEM") {
+    try { await navigator.clipboard.writeText(texto); setCopied(qual); } catch { setCopied(null); }
+  }
+
   const access = result.access;
+  const cnpj = formatCnpj(access?.cnpj || organizationTaxId);
+  const portal = typeof window === "undefined" ? "" : `${window.location.origin}${apiUrl("/login")}`;
+  const mensagem = generated ? `Acesso ao portal de notas fiscais da Moreira & Castro\nPortal: ${portal}\nCNPJ: ${cnpj}\nSenha: ${generated}` : "";
+  const primary: Mode | null = !access ? "CREATE" : access.status === "INVALID" ? "REPAIR" : null;
+
   return <section className="client-access-manager">
-    <div className="client-access-header"><div><p className="eyebrow">Acesso do cliente</p><h2>{access ? result.readiness.message : "Nenhum acesso cadastrado."}</h2><p>O cliente entra apenas com CNPJ e senha. A identidade técnica permanece interna.</p></div>{access?.status === "ACTIVE" ? <ShieldCheck className="client-access-icon valid" /> : <LockKeyhole className="client-access-icon" />}</div>
+    <div className="client-access-header"><div><p className="eyebrow">Acesso do cliente</p><h2>{access ? result.readiness.message : "Nenhum acesso cadastrado."}</h2><p>Opcional: só se o cliente for emitir pelo portal. Ele entra com o CNPJ e uma senha.</p></div>{access?.status === "ACTIVE" ? <ShieldCheck className="client-access-icon valid" /> : <LockKeyhole className="client-access-icon" />}</div>
     {access && <dl className="client-access-details">
-      <div><dt>CNPJ</dt><dd>{formatCnpj(access.cnpj || organizationTaxId)}</dd></div>
+      <div><dt>CNPJ</dt><dd>{cnpj}</dd></div>
       <div><dt>Status</dt><dd><span className={`status ${access.status === "ACTIVE" ? "" : "warning"}`}>{access.status === "ACTIVE" ? "Ativo" : access.status === "BLOCKED" ? "Bloqueado" : "Requer revisão"}</span></dd></div>
       <div><dt>Criado em</dt><dd>{formatDate(access.createdAt)}</dd></div>
       <div><dt>Senha</dt><dd>Protegida pelo Supabase Auth</dd></div>
     </dl>}
     {notice && <p className="alert success" role="status">{notice}</p>}
     {error && <p className="alert error" role="alert">{error}</p>}
+    {generated ? <div className="client-access-generated" role="status">
+      <strong>Senha gerada: anote ou envie agora. Ela não será mostrada de novo.</strong>
+      <div className="client-access-generated-line"><code>{generated}</code><button className="button ghost" type="button" onClick={() => copy(generated, "SENHA")}><Copy size={16} />{copied === "SENHA" ? "Copiada" : "Copiar senha"}</button></div>
+      <textarea className="input" readOnly rows={4} value={mensagem} aria-label="Mensagem para o cliente" />
+      <button className="button secondary" type="button" onClick={() => copy(mensagem, "MENSAGEM")}><Copy size={16} />{copied === "MENSAGEM" ? "Mensagem copiada" : "Copiar mensagem para o cliente"}</button>
+    </div> : null}
     {!canWrite && <p className="client-access-note">Seu perfil pode consultar o status, mas somente superadministradores podem alterar o acesso.</p>}
-    {canWrite && mode && <div className="client-access-password-form">
-      <div><strong>{mode === "CREATE" ? "Criar acesso principal" : mode === "REPAIR" ? "Reparar acesso do cliente" : "Redefinir senha"}</strong><p>{mode === "CREATE" ? `O acesso será criado para o CNPJ ${formatCnpj(organizationTaxId)}.` : mode === "REPAIR" ? "Uma nova identidade CLIENT_USER será criada. O acesso administrativo atual será preservado." : "A senha atual não será exibida nem recuperada."}</p></div>
+    {canWrite && primary && !manual && <div className="client-access-actions">
+      <button className="button primary" type="button" onClick={() => generate(primary)} disabled={saving}><UserRoundPlus size={18} />{saving ? "Gerando…" : primary === "CREATE" ? "Gerar acesso" : "Reparar e gerar senha"}</button>
+      <button className="button ghost" type="button" onClick={() => { setManual(primary); setError(null); }}>Definir a senha manualmente</button>
+    </div>}
+    {canWrite && manual && <div className="client-access-password-form">
+      <div><strong>{manual === "CREATE" ? "Criar acesso com senha definida" : manual === "REPAIR" ? "Reparar acesso do cliente" : "Redefinir senha"}</strong><p>{manual === "CREATE" ? `O acesso será criado para o CNPJ ${formatCnpj(organizationTaxId)}.` : manual === "REPAIR" ? "Uma nova identidade CLIENT_USER será criada. O acesso administrativo atual será preservado." : "A senha atual não será exibida nem recuperada."}</p></div>
       <label>Nova senha<input className="input" type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} /></label>
       <label>Confirmar senha<input className="input" type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} /></label>
-      <div className="client-access-form-actions">{access && <button className="button ghost" type="button" onClick={() => { setMode(null); setError(null); }}>Cancelar</button>}<button className="button primary" type="button" onClick={submitPassword} disabled={saving}><UserRoundPlus size={18}/>{saving ? "Salvando…" : mode === "CREATE" ? "Criar acesso" : mode === "REPAIR" ? "Criar acesso CLIENT_USER" : "Salvar nova senha"}</button></div>
+      <div className="client-access-form-actions"><button className="button ghost" type="button" onClick={() => { setManual(null); setError(null); }}>Cancelar</button><button className="button primary" type="button" onClick={submitManual} disabled={saving}><UserRoundPlus size={18}/>{saving ? "Salvando…" : manual === "CREATE" ? "Criar acesso" : manual === "REPAIR" ? "Criar acesso CLIENT_USER" : "Salvar nova senha"}</button></div>
     </div>}
-    {canWrite && access && !mode && <div className="client-access-actions">
-      {access.status === "INVALID" ? <button className="button primary" type="button" onClick={() => { setMode("REPAIR"); setError(null); setNotice(null); }}><UserRoundPlus size={17}/>Reparar acesso do cliente</button> : null}
+    {canWrite && access && access.status !== "INVALID" && !manual && <div className="client-access-actions">
       {access.status === "ACTIVE" ? <button className="button secondary" type="button" onClick={() => changeState("BLOCK")} disabled={saving}><LockKeyhole size={17}/>Bloquear acesso</button> : <button className="button primary" type="button" onClick={() => changeState("REACTIVATE")} disabled={saving}><RotateCcw size={17}/>Reativar acesso</button>}
-      <button className="button ghost" type="button" onClick={() => { setMode("RESET"); setError(null); setNotice(null); }}><KeyRound size={17}/>Redefinir senha</button>
+      <button className="button ghost" type="button" onClick={() => generate("RESET")} disabled={saving}><KeyRound size={17}/>Gerar nova senha</button>
+      <button className="button ghost" type="button" onClick={() => { setManual("RESET"); setError(null); setNotice(null); setGenerated(null); }}>Definir senha manualmente</button>
     </div>}
   </section>;
 }

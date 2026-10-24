@@ -18,7 +18,7 @@ type Onde = "BRASIL" | "EXTERIOR" | "NAO_INFORMADO";
 const NOME_PAIS = new Map(paises.map((item) => [item.codigo, item.nome]));
 
 /** Máscara de CPF (até 11 dígitos) ou CNPJ enquanto digita. */
-function mascaraDocumento(texto: string) {
+export function mascaraDocumento(texto: string) {
   const d = texto.replace(/\D/g, "").slice(0, 14);
   if (d.length <= 11) return d.replace(/^(\d{3})(\d)/, "$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1-$2");
   return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})$/, "$1.$2.$3/$4-$5");
@@ -174,7 +174,7 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje, ib
   </form>;
 }
 
-function UltimosTomadores({ tomadores, onEscolher, onFechar }: { tomadores: TomadorSalvo[]; onEscolher: (t: TomadorSalvo) => void; onFechar: () => void }) {
+export function UltimosTomadores({ tomadores, onEscolher, onFechar }: { tomadores: TomadorSalvo[]; onEscolher: (t: TomadorSalvo) => void; onFechar: () => void }) {
   const [busca, setBusca] = useState("");
   const lista = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase("pt-BR");
@@ -227,7 +227,7 @@ function TomadorExterior({ erros }: { erros: Record<string, string> }) {
 }
 
 /** Intermediário do serviço no Brasil (CPF/CNPJ); o CNPJ puxa a razão social do cartão CNPJ e ela fica travada. */
-function Intermediario({ inicial, erros }: { inicial: IntermediarioRascunho | null; erros: Record<string, string> }) {
+export function Intermediario({ inicial, erros }: { inicial: IntermediarioRascunho | null; erros: Record<string, string> }) {
   const [informar, setInformar] = useState(Boolean(inicial));
   const [documento, setDocumento] = useState(inicial ? formatarDocumento(inicial.documento) : "");
   const [nome, setNome] = useState(inicial?.nome ?? "");

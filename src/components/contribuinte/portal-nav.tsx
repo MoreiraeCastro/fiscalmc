@@ -6,7 +6,7 @@ import { Building2, FilePen, FilePlus2, FileText, Home, Inbox, Settings, Star } 
 
 const itens = [
   { href: "/contribuinte", rotulo: "Página Principal", Icone: Home, ativo: (p: string) => p === "/contribuinte" },
-  { href: "/contribuinte/nova", rotulo: "Nova NFS-e", Icone: FilePlus2, ativo: (p: string) => p.startsWith("/contribuinte/nova") || p.startsWith("/contribuinte/dps") },
+  { href: "/contribuinte/nova", rotulo: "Nova NFS-e", Icone: FilePlus2, ativo: (p: string) => p.startsWith("/contribuinte/nova") || p.startsWith("/contribuinte/rapida") || p.startsWith("/contribuinte/dps") },
   { href: "/contribuinte/notas/emitidas", rotulo: "NFS-e Emitidas", Icone: FileText, ativo: (p: string) => p.startsWith("/contribuinte/notas/emitidas") },
   { href: "/contribuinte/notas/recebidas", rotulo: "NFS-e Recebidas", Icone: Inbox, ativo: (p: string) => p.startsWith("/contribuinte/notas/recebidas") },
   { href: "/contribuinte/notas/rascunhos", rotulo: "Rascunhos", Icone: FilePen, ativo: (p: string) => p.startsWith("/contribuinte/notas/rascunhos") },

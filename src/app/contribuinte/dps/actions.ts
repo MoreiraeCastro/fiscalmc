@@ -7,7 +7,7 @@ import { getConfiguredNFSeEnvironment } from "@/lib/nfse/environments";
 import { ibsCbsObrigatorio } from "@/lib/nfse/ibs-cbs";
 import indicadores from "@/lib/contribuinte/indicadores-operacao.json";
 import paises from "@/lib/contribuinte/paises.json";
-import { centavosParaTexto, validarComercioExterior, validarComplemento, validarIbsCbs, validarIntermediario, validarMotivoSubstituicao, validarNovoTomador, validarPessoas, validarServico, validarTomadorExterior, validarValores, type Erros, type IntermediarioRascunho, type TomadorRascunho } from "@/lib/contribuinte/dps";
+import { centavosParaTexto, validarComercioExterior, validarComplemento, validarIbsCbs, validarIntermediario, validarMotivoSubstituicao, validarNovoTomador, validarPessoas, validarServico, validarTomadorExterior, validarValores, type ComercioExteriorRascunho, type ComplementoRascunho, type DadosRascunho, type Erros, type IbsCbsRascunho, type IntermediarioRascunho, type ServicoRascunho, type SubstituicaoRascunho, type TomadorRascunho, type ValoresRascunho } from "@/lib/contribuinte/dps";
 import { modoEmissao, servicosProntos, tomadorPorId, tomadoresSalvos, type TomadorSalvo } from "@/lib/contribuinte/emissao";
 import { discoverMunicipalServiceCodes, type MunicipalServiceOption } from "@/lib/nfse/municipal-parameters/discovery";
 import { nbsForLc116, searchNbsCatalog, type NbsCandidate } from "@/lib/organizations/nbs-activity-resolver";
@@ -78,10 +78,21 @@ function texto(formData: FormData, campo: string) {
   return String(formData.get(campo) ?? "");
 }
 
+type Contexto = NonNullable<Awaited<ReturnType<typeof empresaQueEmite>>>;
+/** Resultado de um passo resolvido: os dados para o rascunho, ou o estado de erro para a tela. */
+type Resolvido<T> = { ok: true; dados: T } | { ok: false; estado: EstadoPasso };
+
 /** Passo 1 → Pessoas. Cria o tomador se for novo (com o endereço da Receita) e grava o rascunho. */
 export async function salvarPessoas(rascunhoId: string | null, _anterior: EstadoPasso, formData: FormData): Promise<EstadoPasso> {
   const contexto = await empresaQueEmite();
   if (!contexto) return SEM_PERMISSAO;
+  const pessoas = await resolverPessoas(contexto, formData);
+  if (!pessoas.ok) return pessoas.estado;
+  const id = await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: rascunhoId, passo: 2, dados: { ...pessoas.dados, ...(pessoas.dados.informarIbsCbs ? {} : { ibsCbs: undefined }) } });
+  redirect(`/contribuinte/dps/${id}/servico`);
+}
+
+async function resolverPessoas(contexto: Contexto, formData: FormData): Promise<Resolvido<{ competencia: string; tomador?: TomadorRascunho; semTomador: boolean; intermediario?: IntermediarioRascunho; informarIbsCbs: boolean }>> {
   const { empresa, usuarioId } = contexto;
   const onde = texto(formData, "onde");
   const semTomador = onde === "NAO_INFORMADO";
@@ -99,7 +110,7 @@ export async function salvarPessoas(rascunhoId: string | null, _anterior: Estado
   if (exterior && !tomador) {
     const resultado = await salvarTomadorExterior(contexto, formData);
     if ("erros" in resultado) Object.assign(erros, resultado.erros);
-    else if ("falha" in resultado) return { erros, mensagem: resultado.falha };
+    else if ("falha" in resultado) return { ok: false, estado: { erros, mensagem: resultado.falha } };
     else tomador = resultado.tomador;
   }
   if (!semTomador && !exterior && !tomador && documento.trim()) {
@@ -125,7 +136,7 @@ export async function salvarPessoas(rascunhoId: string | null, _anterior: Estado
           address_complement: limpo(endereco.addressComplement, 120), neighborhood: limpo(endereco.neighborhood, 120),
           municipality_code: municipio && /^\d{7}$/.test(municipio) ? municipio : null, state: limpo(endereco.state, 2),
         }).select("id,tax_id,legal_name").single();
-        if (error || !criado) return { erros, mensagem: "Não foi possível salvar o tomador." };
+        if (error || !criado) return { ok: false, estado: { erros, mensagem: "Não foi possível salvar o tomador." } };
         await db.from("audit_logs").insert({ organization_id: empresa.id, actor_user_id: usuarioId, actor_type: contexto.escritorio ? "OFFICE" : "CLIENT", action: "customer_created", entity: "customer", entity_id: criado.id, safe_metadata: { via: "portal_contribuinte" } });
         tomador = { clienteId: criado.id, documento: criado.tax_id, nome: criado.legal_name };
       }
@@ -142,11 +153,10 @@ export async function salvarPessoas(rascunhoId: string | null, _anterior: Estado
     const validado = validarIntermediario({ documento: doc, nome: cartao?.ok && cartao.customer.legalName ? cartao.customer.legalName : texto(formData, "intermNome"), email: texto(formData, "intermEmail") });
     if (validado.ok) intermediario = validado.valor; else Object.assign(erros, validado.erros);
   }
-  if (Object.keys(erros).length || !pessoas.ok || (!tomador && !semTomador)) return { erros };
+  if (Object.keys(erros).length || !pessoas.ok || (!tomador && !semTomador)) return { ok: false, estado: { erros } };
   // IBS/CBS: escolha do usuário, mas obrigatório a partir da competência exigida pelo ambiente.
   const informarIbsCbs = texto(formData, "ibsCbs") === "SIM" || ibsCbsObrigatorio(getConfiguredNFSeEnvironment(), pessoas.valor.competencia);
-  const id = await gravarRascunho({ empresaId: empresa.id, usuarioId, id: rascunhoId, passo: 2, dados: { competencia: pessoas.valor.competencia, tomador: tomador ?? undefined, semTomador, intermediario, informarIbsCbs, ...(informarIbsCbs ? {} : { ibsCbs: undefined }) } });
-  redirect(`/contribuinte/dps/${id}/servico`);
+  return { ok: true, dados: { competencia: pessoas.valor.competencia, tomador: tomador ?? undefined, semTomador, intermediario, informarIbsCbs } };
 }
 
 /** Tomador no exterior digitado no passo 1: valida e salva (com NIF já cadastrado, atualiza o endereço). */
@@ -177,36 +187,44 @@ async function salvarTomadorExterior(contexto: NonNullable<Awaited<ReturnType<ty
 export async function salvarServico(rascunhoId: string, _anterior: EstadoPasso, formData: FormData): Promise<EstadoPasso> {
   const contexto = await empresaQueEmite();
   if (!contexto) return SEM_PERMISSAO;
+  const rascunho = await carregarRascunho(contexto.empresa.id, rascunhoId);
+  const servico = await resolverServico(contexto, formData, { competencia: rascunho?.dados.competencia, informarIbsCbs: Boolean(rascunho?.dados.informarIbsCbs), exterior: Boolean(rascunho?.dados.tomador?.exterior) });
+  if (!servico.ok) return servico.estado;
+  // Trocar de serviço pode mudar a alíquota: os valores precisam ser confirmados de novo.
+  const substituicao = rascunho?.dados.substituicao;
+  const valores = rascunho?.dados.servico?.modeloId === servico.dados.servico.modeloId ? rascunho.dados.valores : substituicao ? { valorCentavos: substituicao.valorCentavos } : undefined;
+  await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: rascunhoId, passo: 3, dados: { ...servico.dados, valores } });
+  redirect(`/contribuinte/dps/${rascunhoId}/valores`);
+}
+
+/** campoIbs: nome dos campos de IBS/CBS no formulário (na emissão rápida levam prefixo, porque "cst" também é o do PIS/COFINS). */
+async function resolverServico(contexto: Contexto, formData: FormData, base: { competencia?: string; informarIbsCbs: boolean; exterior: boolean; campoIbs?: (nome: string) => string }): Promise<Resolvido<{ servico: ServicoRascunho; complemento?: ComplementoRascunho; comercioExterior?: ComercioExteriorRascunho; ibsCbs?: IbsCbsRascunho }>> {
+  const campoIbs = base.campoIbs ?? ((nome: string) => nome);
   // Lista nacional: o serviço da empresa é montado (ou reaproveitado) a partir do código, do complemento municipal e da NBS escolhidos.
   let modeloId = texto(formData, "servico");
   const codigoNacionalId = texto(formData, "codigoNacional");
   if (!modeloId && codigoNacionalId) {
-    const montado = await montarServicoAutomatico(contexto, rascunhoId, codigoNacionalId, texto(formData, "codigoMunicipal"), texto(formData, "nbs"));
-    if ("erros" in montado) return montado;
+    const montado = await montarServicoAutomatico(contexto, base.competencia ?? hojeBrasilia(), codigoNacionalId, texto(formData, "codigoMunicipal"), texto(formData, "nbs"));
+    if ("erros" in montado) return { ok: false, estado: montado };
     modeloId = montado.id;
   }
   const servico = validarServico({ modeloId, descricao: texto(formData, "descricao") });
-  if (!servico.ok) return { erros: servico.erros };
+  if (!servico.ok) return { ok: false, estado: { erros: servico.erros } };
   const servicos = await servicosProntos(contexto.empresa.id);
-  if (!servicos.some((item) => item.id === servico.valor.modeloId)) return { erros: { servico: "Serviço indisponível para emissão" } };
-  const rascunho = await carregarRascunho(contexto.empresa.id, rascunhoId);
-  const ibsCbs = rascunho?.dados.informarIbsCbs
-    ? validarIbsCbs({ cst: texto(formData, "cst"), classificacao: texto(formData, "classificacao"), indicadorOperacao: texto(formData, "indicadorOperacao"), consumoPessoal: texto(formData, "consumoPessoal") }, indicadores.map((item) => item.codigo))
+  if (!servicos.some((item) => item.id === servico.valor.modeloId)) return { ok: false, estado: { erros: { servico: "Serviço indisponível para emissão" } } };
+  const ibsCbs = base.informarIbsCbs
+    ? validarIbsCbs({ cst: texto(formData, campoIbs("cst")), classificacao: texto(formData, campoIbs("classificacao")), indicadorOperacao: texto(formData, campoIbs("indicadorOperacao")), consumoPessoal: texto(formData, campoIbs("consumoPessoal")) }, indicadores.map((item) => item.codigo))
     : null;
   const complemento = validarComplemento({ docTecnico: texto(formData, "docTecnico"), docReferencia: texto(formData, "docReferencia"), pedido: texto(formData, "pedido"), informacoes: texto(formData, "informacoes") });
-  const comercio = rascunho?.dados.tomador?.exterior
+  const comercio = base.exterior
     ? validarComercioExterior({ modo: texto(formData, "cx_modo"), vinculo: texto(formData, "cx_vinculo"), moeda: texto(formData, "cx_moeda"), valorMoeda: texto(formData, "cx_valorMoeda"), mecPrestador: texto(formData, "cx_mecPrestador"), mecTomador: texto(formData, "cx_mecTomador"), movTempBens: texto(formData, "cx_movTempBens"), nDI: texto(formData, "cx_nDI"), nRE: texto(formData, "cx_nRE"), mdic: texto(formData, "cx_mdic") })
     : null;
-  const errosExtras = { ...(ibsCbs && !ibsCbs.ok ? ibsCbs.erros : {}), ...(!complemento.ok ? complemento.erros : {}), ...(comercio && !comercio.ok ? Object.fromEntries(Object.entries(comercio.erros).map(([campo, erro]) => [`cx_${campo}`, erro])) : {}) };
-  if (Object.keys(errosExtras).length) return { erros: errosExtras };
-  // Trocar de serviço pode mudar a alíquota: os valores precisam ser confirmados de novo.
-  const substituicao = rascunho?.dados.substituicao;
-  const valores = rascunho?.dados.servico?.modeloId === servico.valor.modeloId ? rascunho.dados.valores : substituicao ? { valorCentavos: substituicao.valorCentavos } : undefined;
-  await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: rascunhoId, passo: 3, dados: { servico: servico.valor, valores, complemento: complemento.ok ? complemento.valor : undefined, comercioExterior: comercio?.ok ? comercio.valor : undefined, ...(ibsCbs?.ok ? { ibsCbs: ibsCbs.valor } : {}) } });
-  redirect(`/contribuinte/dps/${rascunhoId}/valores`);
+  const errosExtras = { ...(ibsCbs && !ibsCbs.ok ? Object.fromEntries(Object.entries(ibsCbs.erros).map(([campo, erro]) => [campoIbs(campo), erro])) : {}), ...(!complemento.ok ? complemento.erros : {}), ...(comercio && !comercio.ok ? Object.fromEntries(Object.entries(comercio.erros).map(([campo, erro]) => [`cx_${campo}`, erro])) : {}) };
+  if (Object.keys(errosExtras).length) return { ok: false, estado: { erros: errosExtras } };
+  return { ok: true, dados: { servico: servico.valor, complemento: complemento.ok ? complemento.valor : undefined, comercioExterior: comercio?.ok ? comercio.valor : undefined, ...(ibsCbs?.ok ? { ibsCbs: ibsCbs.valor } : {}) } };
 }
 
-async function montarServicoAutomatico(contexto: NonNullable<Awaited<ReturnType<typeof empresaQueEmite>>>, rascunhoId: string, codigoNacionalId: string, codigoMunicipal: string, nbs: string): Promise<{ id: string } | EstadoPasso> {
+async function montarServicoAutomatico(contexto: Contexto, competencia: string, codigoNacionalId: string, codigoMunicipal: string, nbs: string): Promise<{ id: string } | EstadoPasso> {
   const erros: Erros = {};
   if (!codigoMunicipal) erros.codigoMunicipal = "Campo obrigatório";
   if (!nbs) erros.nbs = "Campo obrigatório";
@@ -215,10 +233,9 @@ async function montarServicoAutomatico(contexto: NonNullable<Awaited<ReturnType<
   const catalogo = await codigoDoCatalogo(codigoNacionalId);
   if (!catalogo) return { erros: { servico: "Código de tributação nacional não encontrado." } };
   // Confere o complemento de novo no ADN (o formulário não é fonte de verdade); a consulta fica em cache por algumas horas.
-  const rascunho = await carregarRascunho(contexto.empresa.id, rascunhoId);
   let opcoes: MunicipalServiceOption[];
   try {
-    opcoes = await discoverMunicipalServiceCodes({ organizationId: contexto.empresa.id, municipalityCode: contexto.empresa.municipio, nationalTaxCode: catalogo.code, competence: rascunho?.dados.competencia ?? hojeBrasilia() });
+    opcoes = await discoverMunicipalServiceCodes({ organizationId: contexto.empresa.id, municipalityCode: contexto.empresa.municipio, nationalTaxCode: catalogo.code, competence: competencia });
   } catch (error) {
     return { erros: {}, mensagem: error instanceof SafeFiscalError ? error.safeMessage : "Não foi possível consultar os parâmetros do município agora." };
   }
@@ -234,9 +251,16 @@ export async function salvarValores(rascunhoId: string, _anterior: EstadoPasso, 
   if (!contexto) return SEM_PERMISSAO;
   const rascunho = await carregarRascunho(contexto.empresa.id, rascunhoId);
   if (!rascunho?.dados.servico) return { erros: {}, mensagem: "Escolha o serviço no passo 2 antes." };
-  const servico = (await servicosProntos(contexto.empresa.id)).find((item) => item.id === rascunho.dados.servico?.modeloId);
+  const valores = await resolverValores(contexto, formData, { modeloId: rascunho.dados.servico.modeloId, substituicao: rascunho.dados.substituicao });
+  if (!valores.ok) return valores.estado;
+  await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: rascunhoId, passo: 4, dados: valores.dados });
+  redirect(`/contribuinte/dps/${rascunhoId}/emitir`);
+}
+
+async function resolverValores(contexto: Contexto, formData: FormData, base: { modeloId: string; substituicao?: SubstituicaoRascunho }): Promise<Resolvido<{ valores: ValoresRascunho; substituicao?: SubstituicaoRascunho }>> {
+  const servico = (await servicosProntos(contexto.empresa.id)).find((item) => item.id === base.modeloId);
   const exigeAliquota = Boolean(contexto.escritorio && servico?.exigeAliquotaManual);
-  const substituicao = rascunho.dados.substituicao;
+  const substituicao = base.substituicao;
   // Na substituição o valor fica travado no da nota original (como no Emissor Nacional).
   const valor = substituicao ? centavosParaTexto(substituicao.valorCentavos) : texto(formData, "valor");
   const valores = validarValores({
@@ -244,9 +268,32 @@ export async function salvarValores(rascunhoId: string, _anterior: EstadoPasso, 
     federal: { cst: texto(formData, "cst") || "00", base: texto(formData, "basePisCofins"), pis: texto(formData, "aliqPis"), cofins: texto(formData, "aliqCofins"), retencao: texto(formData, "retencaoPisCofins"), irrf: texto(formData, "irrf"), cs: texto(formData, "cs"), cp: texto(formData, "cp") },
   });
   const motivo = substituicao ? validarMotivoSubstituicao({ codigo: texto(formData, "motivoCodigo"), motivo: texto(formData, "motivo") }) : null;
-  if (!valores.ok || (motivo && !motivo.ok)) return { erros: { ...(valores.ok ? {} : valores.erros), ...(motivo && !motivo.ok ? motivo.erros : {}) } };
-  await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: rascunhoId, passo: 4, dados: { valores: valores.valor, ...(substituicao && motivo?.ok ? { substituicao: { ...substituicao, motivoCodigo: motivo.valor.motivoCodigo, motivo: motivo.valor.motivo } } : {}) } });
-  redirect(`/contribuinte/dps/${rascunhoId}/emitir`);
+  if (!valores.ok || (motivo && !motivo.ok)) return { ok: false, estado: { erros: { ...(valores.ok ? {} : valores.erros), ...(motivo && !motivo.ok ? motivo.erros : {}) } } };
+  return { ok: true, dados: { valores: valores.valor, ...(substituicao && motivo?.ok ? { substituicao: { ...substituicao, motivoCodigo: motivo.valor.motivoCodigo, motivo: motivo.valor.motivo } } : {}) } };
+}
+
+/**
+ * Emissão rápida: os três passos numa tela só, com as mesmas regras (resolverPessoas, resolverServico e resolverValores).
+ * Grava o rascunho já pronto para emitir e volta para a mesma tela, que passa a mostrar a revisão e o botão Emitir.
+ * Tomador no exterior e substituição ficam na emissão completa.
+ */
+export async function salvarRapida(rascunhoId: string | null, _anterior: EstadoPasso, formData: FormData): Promise<EstadoPasso> {
+  const contexto = await empresaQueEmite();
+  if (!contexto) return SEM_PERMISSAO;
+  const anterior = rascunhoId ? await carregarRascunho(contexto.empresa.id, rascunhoId) : null;
+  if (rascunhoId && (!anterior || anterior.notaId || anterior.dados.substituicao)) return { erros: {}, mensagem: "Este rascunho não pode ser aberto na emissão rápida." };
+  const pessoas = await resolverPessoas(contexto, formData);
+  if (!pessoas.ok) return pessoas.estado;
+  const campoIbs = (nome: string) => `ibs_${nome}`;
+  const servico = await resolverServico(contexto, formData, { competencia: pessoas.dados.competencia, informarIbsCbs: pessoas.dados.informarIbsCbs, exterior: false, campoIbs });
+  if (!servico.ok) return servico.estado;
+  const pronto = (await servicosProntos(contexto.empresa.id)).find((item) => item.id === servico.dados.servico.modeloId);
+  if (contexto.escritorio && pronto?.exigeAliquotaManual) return { erros: {}, mensagem: "Este serviço precisa da alíquota do ISS informada pelo escritório: use a emissão completa." };
+  const valores = await resolverValores(contexto, formData, { modeloId: servico.dados.servico.modeloId });
+  if (!valores.ok) return valores.estado;
+  const dados: DadosRascunho = { ...pessoas.dados, ...servico.dados, ...valores.dados, rapida: true };
+  const id = await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: rascunhoId, passo: 4, dados, substituir: true });
+  redirect(`/contribuinte/rapida?r=${id}`);
 }
 
 export async function excluirRascunhoAction(formData: FormData) {

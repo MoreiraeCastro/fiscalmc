@@ -80,7 +80,7 @@ const percentual = (bp: number | undefined) => (bp === undefined ? "" : (bp / 10
  * Tributação federal, como no Emissor Nacional: PIS/COFINS (débito, não entra no líquido) e as retenções.
  * "Contribuições sociais retidas" é o total de PIS/COFINS/CSLL retido (vRetCSLL), que a Receita desconta do líquido.
  */
-function TributacaoFederal({ inicial, valorServico, descIncond, erros }: { inicial: FederalRascunho | null; valorServico: string; descIncond: string; erros: Record<string, string> }) {
+export function TributacaoFederal({ inicial, valorServico, descIncond, erros }: { inicial: FederalRascunho | null; valorServico: string; descIncond: string; erros: Record<string, string> }) {
   const [cst, setCst] = useState(inicial?.cst ?? "00");
   const [base, setBase] = useState(inicial?.baseCentavos ? centavosParaTexto(inicial.baseCentavos) : "");
   const [pis, setPis] = useState(percentual(inicial?.pisBp) || "0,65");

@@ -21,7 +21,8 @@ export async function carregarRascunho(empresaId: string, id: string): Promise<R
 }
 
 /** Grava o passo: cria o rascunho no 1º "Avançar" e, depois, junta os dados e guarda o passo mais adiantado. */
-export async function gravarRascunho(input: { empresaId: string; usuarioId: string; id: string | null; dados: DadosRascunho; passo: NumeroPasso }) {
+/** substituir = troca os dados inteiros (emissão rápida: o que foi apagado na tela não pode sobrar do rascunho anterior). */
+export async function gravarRascunho(input: { empresaId: string; usuarioId: string; id: string | null; dados: DadosRascunho; passo: NumeroPasso; substituir?: boolean }) {
   const db = createAdminClient();
   const agora = new Date().toISOString();
   if (!input.id) {
@@ -33,7 +34,7 @@ export async function gravarRascunho(input: { empresaId: string; usuarioId: stri
   const atual = await carregarRascunho(input.empresaId, input.id);
   if (!atual || atual.notaId) throw new Error("Rascunho não encontrado.");
   const { error } = await db.from("invoice_drafts")
-    .update({ data: { ...atual.dados, ...input.dados }, step: Math.max(atual.passo, input.passo), updated_by: input.usuarioId, updated_at: agora })
+    .update({ data: input.substituir ? input.dados : { ...atual.dados, ...input.dados }, step: input.substituir ? input.passo : Math.max(atual.passo, input.passo), updated_by: input.usuarioId, updated_at: agora })
     .eq("organization_id", input.empresaId).eq("id", input.id);
   if (error) throw new Error("Não foi possível salvar o rascunho.");
   return input.id;

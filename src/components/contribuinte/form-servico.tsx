@@ -121,7 +121,7 @@ function ComercioExterior({ inicial, erros }: { inicial: Partial<ComercioExterio
 }
 
 /** Informações complementares (grupo infoCompl): todas opcionais. */
-function InformacoesComplementares({ inicial, erros }: { inicial: ComplementoRascunho; erros: Record<string, string> }) {
+export function InformacoesComplementares({ inicial, erros }: { inicial: ComplementoRascunho; erros: Record<string, string> }) {
   const [dados, setDados] = useState({ docTecnico: inicial.docTecnico ?? "", docReferencia: inicial.docReferencia ?? "", pedido: inicial.pedido ?? "", informacoes: inicial.informacoes ?? "" });
   const mudar = (campo: keyof typeof dados) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setDados((atual) => ({ ...atual, [campo]: e.target.value }));
   return <Cartao titulo="Informações complementares">

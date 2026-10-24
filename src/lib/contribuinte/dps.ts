@@ -32,7 +32,7 @@ export type ComercioExteriorRascunho = { modo: string; vinculo: string; moeda: s
 export type SubstituicaoRascunho = { notaId: string; chave: string; numero: string | null; competencia: string; valorCentavos: number; motivoCodigo?: MotivoSubstituicao; motivo?: string };
 /** IBS/CBS do passo Serviço (CST, cClassTrib, cIndOp e indFinal); indDest é sempre 0 (destinatário = adquirente). */
 export type IbsCbsRascunho = { cst: string; classificacao: string; indicadorOperacao: string; consumoPessoal: "0" | "1" };
-export type DadosRascunho = { competencia?: string; tomador?: TomadorRascunho; /** Tomador/Adquirente não informado. */ semTomador?: boolean; intermediario?: IntermediarioRascunho; informarIbsCbs?: boolean; ibsCbs?: IbsCbsRascunho; servico?: ServicoRascunho; complemento?: ComplementoRascunho; comercioExterior?: ComercioExteriorRascunho; valores?: ValoresRascunho; substituicao?: SubstituicaoRascunho };
+export type DadosRascunho = { /** Criado pela emissão rápida (a revisão volta para /contribuinte/rapida). */ rapida?: boolean; competencia?: string; tomador?: TomadorRascunho; /** Tomador/Adquirente não informado. */ semTomador?: boolean; intermediario?: IntermediarioRascunho; informarIbsCbs?: boolean; ibsCbs?: IbsCbsRascunho; servico?: ServicoRascunho; complemento?: ComplementoRascunho; comercioExterior?: ComercioExteriorRascunho; valores?: ValoresRascunho; substituicao?: SubstituicaoRascunho };
 
 export const MOTIVOS_SUBSTITUICAO = {
   "01": "Desenquadramento de NFS-e do Simples Nacional",

@@ -171,3 +171,10 @@ export async function previaTributacao(empresaId: string, dados: DadosRascunho):
     };
   }
 }
+
+/** Serviço e descrição da última nota emitida pela empresa, para já virem escolhidos na emissão rápida. */
+export async function ultimoServicoUsado(empresaId: string): Promise<{ modeloId: string; descricao: string } | null> {
+  const { data } = await createAdminClient().from("invoices").select("service_template_id,description")
+    .eq("organization_id", empresaId).in("status", ["ISSUED", "CANCELLED"]).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  return data?.service_template_id ? { modeloId: data.service_template_id, descricao: data.description ?? "" } : null;
+}

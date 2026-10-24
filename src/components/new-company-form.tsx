@@ -99,12 +99,14 @@ export function NewCompanyForm({organizationId,initialValues,canWriteCertificate
       if(!response.ok){setError(data?.error??"Não foi possível criar a empresa. Revise os dados e tente novamente.");return;}
       if(organizationId){router.refresh();return;}
       const newId=data.organization.id as string;
+      // Sem a situação no Simples na Receita, o perfil fiscal não é criado sozinho: leva direto para configurá-lo.
+      const semPerfil=data.taxProfile==="UNAVAILABLE";
       if(creating&&!withoutCertificate&&certFile){
         const body=new FormData();body.set("file",certFile);body.set("password",certPassword);
         const certResponse=await fetch(apiUrl(`/api/admin/organizations/${newId}/certificate`),{method:"POST",body}).catch(()=>null);
         if(!certResponse?.ok){router.push(`/admin/empresas/${newId}?tab=certificate&certificado=falhou`);return;}
       }
-      router.push(`/admin/empresas/${newId}`);
+      router.push(semPerfil?`/admin/empresas/${newId}?tab=fiscal&perfil=indisponivel`:`/admin/empresas/${newId}`);
     }catch{setError("Não foi possível salvar agora. Verifique a conexão e tente novamente.");}
     finally{setSaving(false);}
   }
@@ -166,7 +168,7 @@ export function NewCompanyForm({organizationId,initialValues,canWriteCertificate
       {error&&<div className="alert error" role="alert"><CircleAlert size={18}/>{error}</div>}
       <div className="company-form-actions"><Link href="/admin/empresas" className="button secondary"><ChevronLeft size={18}/>Cancelar</Link><button className="button primary" disabled={saving}>{saving?<><LoaderCircle className="spin" size={18}/>Salvando cadastro…</>:organizationId?"Salvar dados cadastrais":"Cadastrar empresa"}</button></div>
     </form>
-    <aside className="company-onboarding-aside"><div className="onboarding-note"><ShieldCheck size={22}/><h2>Emissão protegida</h2><p>{organizationId?"Alterar o cadastro não libera emissão. A revisão fiscal continua obrigatória.":"A empresa já é criada liberada para emitir. A emissão só acontece quando o perfil fiscal, os serviços e o certificado A1 estiverem prontos; nada fiscal é preenchido automaticamente."}</p></div><div className="onboarding-checklist"><h2>Depois do cadastro</h2><ol><li>Revise o cadastro e a inscrição municipal.</li><li>Configure o perfil fiscal com dados confirmados.</li><li>Cadastre serviços, certificado e acessos.</li><li>Emita a primeira NFS-e pelo Portal Contribuinte.</li></ol></div></aside>
+    <aside className="company-onboarding-aside"><div className="onboarding-note"><ShieldCheck size={22}/><h2>Com o A1, já emite</h2><p>{organizationId?"O cadastro vem da Receita. Mudar estes dados não altera o perfil fiscal nem os serviços da empresa.":"Basta o certificado A1. O regime (Simples, MEI ou não optante) vem da Receita e o serviço é escolhido na lista nacional na hora de emitir, como no Emissor Nacional."}</p></div><div className="onboarding-checklist"><h2>Opcional</h2><ol><li>Inscrição municipal: só se o município exigir na nota.</li><li>Acesso do cliente: só se ele for emitir pelo portal.</li><li>Chave “só serviços revisados”: para empresas em que o escritório quer conferir cada serviço.</li></ol></div></aside>
   </div>;
 }
 

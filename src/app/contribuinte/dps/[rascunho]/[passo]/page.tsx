@@ -88,7 +88,10 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
       catalogo: await catalogoNacional(), competencia: dados.competencia ?? hojeBrasilia(), municipio: nomeMunicipio(empresa.municipio),
       usados: servicos.map((item) => ({ id: item.id, codigoNacionalId: item.codigoNacionalId, codigoMunicipal: item.codigoMunicipal, nbs: item.nbs, automatico: item.automatico })),
     };
-    return <>{cabecalho}<FormServico rascunhoId={rascunhoId!} escritorio={escritorio} empresaId={empresa.id} nacional={nacional}
+    const avisoPerfil = modo.perfilAceito ? null : <Aviso tipo="alerta">{modo.exigeRevisao
+      ? <>Esta empresa só emite com a configuração fiscal revisada pelo escritório, e ela ainda não foi revisada.</>
+      : <>A consulta de CNPJ não informou se esta empresa é do Simples Nacional. {escritorio ? <>Escolha o regime em <Link className="pc-link" href={`/admin/empresas/${empresa.id}?tab=fiscal`}>Configuração fiscal</Link> antes de emitir.</> : "Peça ao escritório para informar o regime antes de emitir."}</>}</Aviso>;
+    return <>{cabecalho}{avisoPerfil}<FormServico rascunhoId={rascunhoId!} escritorio={escritorio} empresaId={empresa.id} nacional={nacional}
       ibsCbs={dados.informarIbsCbs ? dados.ibsCbs ?? { cst: IBS_CBS_PADRAO.cst, classificacao: IBS_CBS_PADRAO.classification, indicadorOperacao: IBS_CBS_PADRAO.operationIndicator, consumoPessoal: IBS_CBS_PADRAO.finalConsumer } : null}
       inicial={{ modeloId: dados.servico?.modeloId ?? "", descricao: dados.servico?.descricao ?? "" }}
       complemento={dados.complemento ?? null} comercioExterior={dados.tomador?.exterior ? dados.comercioExterior ?? {} : null}

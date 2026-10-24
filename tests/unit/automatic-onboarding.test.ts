@@ -4,6 +4,8 @@ import { nextSuffixes, rateForCompetence, displayNationalCode } from "@/lib/nfse
 import { dpsMunicipalTaxCodeFrom, isAdnAutomaticService, ADN_AUTO_SOURCE } from "@/lib/services/automatic-service";
 import { requiresMunicipalRetention, resolveFiscalConfiguration } from "@/lib/nfse/fiscal-rule-resolver";
 import { findNbs, nbsForLc116 } from "@/lib/organizations/nbs-activity-resolver";
+import { getOrganizationReadiness } from "@/lib/organizations/readiness";
+import { assertDpsReadiness } from "@/lib/nfse/dps/readiness";
 
 function automaticProfile(status: { simples: boolean; mei: boolean }) {
   const { taxRegime, dpsConfiguration } = buildAutomaticFiscalConfiguration(status);
@@ -134,5 +136,37 @@ describe("resolvedor: portas do fluxo automático", () => {
 
   it("PARAMETRIZED sem nota de referência continua recusado fora do fluxo automático", async () => {
     await expect(resolveFiscalConfiguration({ ...base, municipalServiceCode: "17.19.01.000", automaticProfile: true })).rejects.toMatchObject({ code: "FISCAL_CONFIGURATION_INCOMPLETE" });
+  });
+});
+
+describe("prontidão enxuta: só o que a emissão usa", () => {
+  const base = { fiscal: { ready: true, message: "" }, services: { ready: true, message: "" }, certificate: { ready: true, message: "" } };
+
+  it("endereço incompleto vira aviso e não trava", () => {
+    const readiness = getOrganizationReadiness({ ...base, registration: {}, clientAccess: { ready: true, message: "" } });
+    const registro = readiness.items.find((item) => item.key === "registration");
+    expect(registro?.ready).toBe(true);
+    expect(registro?.warning).toBeTruthy();
+    expect(readiness.overallReady).toBe(true);
+  });
+
+  it("sem acesso do cliente continua pronta: o item é opcional", () => {
+    const readiness = getOrganizationReadiness({ ...base, registration: { street: "Rua", addressNumber: "1", neighborhood: "Centro", state: "RJ" }, clientAccess: { ready: false, message: "Acesso do cliente não cadastrado." } });
+    expect(readiness.overallReady).toBe(true);
+    expect(readiness.items.find((item) => item.key === "clientAccess")).toMatchObject({ ready: false, optional: true });
+  });
+
+  it("perfil fiscal ou certificado faltando ainda travam", () => {
+    expect(getOrganizationReadiness({ ...base, fiscal: { ready: false, message: "" }, registration: {}, clientAccess: { ready: true, message: "" } }).overallReady).toBe(false);
+    expect(getOrganizationReadiness({ ...base, certificate: { ready: false, message: "" }, registration: {}, clientAccess: { ready: true, message: "" } }).overallReady).toBe(false);
+  });
+
+  it("a prontidão da DPS não exige o endereço do prestador (ele não vai na DPS)", async () => {
+    await expect(assertDpsReadiness({
+      organization: { legalName: "Prestador", taxId: "12345678000195", municipalRegistration: "", municipalityCode: "3304557", address: { street: "", number: "", neighborhood: "", postalCode: "", municipalityCode: "3304557", stateOrProvince: "" } },
+      service: { nationalTaxCode: "171901", municipalTaxCode: "", locationMunicipalityCode: "3304557" },
+      fiscal: { regime: { simpleNational: "3", special: "0" }, iss: { taxation: "1", withholding: "1", rateSource: "PARAMETRIZED_BY_NATIONAL" }, totalTaxes: { indicator: "0" } },
+      verifyCertificate: false,
+    })).resolves.toMatchObject({ certificateVerified: false });
   });
 });

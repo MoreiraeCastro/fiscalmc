@@ -50,8 +50,8 @@ export async function assertDpsReadiness(input: {
 }) {
   const { organization, service, customer, fiscal } = input;
   if (!organization.legalName || !/^\d{14}$/.test(organization.taxId.replace(/\D/g, "")) || !/^\d{7}$/.test(organization.municipalityCode)) incomplete("organização");
-  const issuerAddress = assertDomesticAddress(organization.address, "organização");
-  if (!organization.address.stateOrProvince) incomplete("organização");
+  // O endereço do prestador não vai na DPS (a SEFIN usa o cadastro dela; ver emitAddress:false em prepare-restricted-dps),
+  // então não trava a emissão aqui.
 
   if (!/^\d{6}$/.test(service.nationalTaxCode) || (service.municipalTaxCode && !/^\d{3}$/.test(service.municipalTaxCode)) || !/^\d{7}$/.test(service.locationMunicipalityCode)) incomplete("serviço");
 
@@ -72,5 +72,5 @@ export async function assertDpsReadiness(input: {
     catch{throw new SafeFiscalError("CERTIFICATE_LOAD_FAILED", "O certificado A1 não está apto para assinar a DPS.");}
   }
 
-  return { issuerAddress, certificateVerified: input.verifyCertificate !== false };
+  return { certificateVerified: input.verifyCertificate !== false };
 }

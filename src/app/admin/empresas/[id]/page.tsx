@@ -27,10 +27,10 @@ type CompanyTab = (typeof tabs)[number][0];
 const readinessTabs: Record<ReadinessItemKey, CompanyTab> = { registration: "overview", fiscal: "fiscal", services: "services", certificate: "certificate", clientAccess: "users" };
 const readinessLabels: Record<ReadinessItemKey, string> = { registration: "Cadastro", fiscal: "Fiscal", services: "Serviços", certificate: "Certificado", clientAccess: "Acesso" };
 
-export default async function CompanyPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; service?: string; certificado?: string }> }) {
+export default async function CompanyPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; service?: string; certificado?: string; perfil?: string }> }) {
   let officeSession;
   try { officeSession = await requireOfficeSession(); } catch { redirect("/app?notice=office"); }
-  const [{ id }, { tab: requested, service: selectedServiceId, certificado }] = await Promise.all([params, searchParams]);
+  const [{ id }, { tab: requested, service: selectedServiceId, certificado, perfil }] = await Promise.all([params, searchParams]);
   if (requested === "issue") redirect(`/contribuinte/usar/${id}?voltar=${encodeURIComponent("/contribuinte/nova")}`);
   const tab: CompanyTab = tabs.some(([key]) => key === requested) ? requested as CompanyTab : "overview";
   const isOverview = tab === "overview";
@@ -74,7 +74,8 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
   });
   const issueCustomers: IssueCustomer[] = (customersResult.data ?? []).map((item) => ({ id: item.id, legalName: item.legal_name, taxId: item.tax_id }));
   const issueServices: IssueService[] = readyServices.map((item) => ({ id: item.id, name: item.name, defaultDescription: item.default_description, requiresManualIssRate: item.iss_taxation !== "3" && item.iss_taxation !== "4" && item.iss_rate_source !== "PARAMETRIZED_BY_NATIONAL" && !item.municipal_service_mapping_id }));
-  const pendingItems = organizationReadiness.items.filter((item) => !item.ready || item.warning);
+  // Só o que impede a emissão conta como pendência; o acesso do cliente é opcional e o endereço incompleto é só aviso.
+  const pendingItems = organizationReadiness.items.filter((item) => !item.ready && !item.optional);
 
   return <div className="page v2-page company-detail-page">
     <header className="v2-company-header">
@@ -87,11 +88,11 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
       <div><section className="v2-panel v2-readiness-panel">
         <div className="v2-panel-heading"><div><h2>Prontidão para emissão</h2><p>Requisitos administrativos e fiscais desta empresa.</p></div><StatusBadge tone={organizationReadiness.overallReady ? "success" : "warning"}>{organizationReadiness.overallReady ? "Completa" : `${pendingItems.length} pendência(s)`}</StatusBadge></div>
         <OfficeReviewToggle organizationId={id} required={requireOfficeReview} canChange={canDeleteCompany} />
-        <div className="v2-readiness-list">{organizationReadiness.items.map((item) => <div key={item.key} className={item.ready ? "is-ready" : "is-pending"}>
-          <span className="v2-readiness-icon">{item.ready ? <Check size={18} /> : <AlertTriangle size={17} />}</span>
+        <div className="v2-readiness-list">{organizationReadiness.items.map((item) => <div key={item.key} className={item.ready || item.optional ? "is-ready" : "is-pending"}>
+          <span className="v2-readiness-icon">{item.ready || item.optional ? <Check size={18} /> : <AlertTriangle size={17} />}</span>
           <span><strong>{readinessLabels[item.key]}</strong><small>{item.warning ?? item.message}</small></span>
-          <StatusBadge tone={item.ready ? item.warning ? "warning" : "success" : "warning"}>{item.ready ? item.warning ? "Atenção" : "Concluído" : "Pendente"}</StatusBadge>
-          <Link href={`/admin/empresas/${id}?tab=${readinessTabs[item.key]}`}>{item.ready ? "Revisar" : "Resolver"}<ArrowRight size={15} /></Link>
+          <StatusBadge tone={item.ready ? item.warning ? "warning" : "success" : item.optional ? "neutral" : "warning"}>{item.ready ? item.warning ? "Atenção" : "Concluído" : item.optional ? "Opcional" : "Pendente"}</StatusBadge>
+          <Link href={`/admin/empresas/${id}?tab=${readinessTabs[item.key]}`}>{item.ready ? "Revisar" : item.optional ? "Cadastrar" : "Resolver"}<ArrowRight size={15} /></Link>
         </div>)}</div>
         <MunicipalRegistrationForm organizationId={company.id} initialValue={company.municipal_registration} />
       </section></div>
@@ -108,6 +109,7 @@ export default async function CompanyPage({ params, searchParams }: { params: Pr
     </div> : null}
     {tab === "issue" ? <section className="v2-issue-admin"><EmissionPreflight organizationId={company.id} canRun={canRunEmissionPreflight} services={issueServices} /><IssueForm customers={issueCustomers} services={issueServices} issuanceOrganizationId={company.id} catalogEnabled requiresProductionConfirmation={process.env.NFSE_ENV?.toLowerCase() === "production"} /></section> : null}
     {tab === "services" ? <ServiceManager organizationId={company.id} municipalityCode={company.municipality_code} initialServices={serviceDtos} catalogAvailable={Boolean(catalogResult.count)} initialSelectedServiceId={selectedServiceId ?? null} /> : null}
+    {tab === "fiscal" && perfil === "indisponivel" && fiscalReadiness.status === "DRAFT" ? <div className="alert" role="status">A empresa foi cadastrada, mas a consulta de CNPJ não informou se ela é do Simples Nacional. Escolha o regime abaixo para ela poder emitir.</div> : null}
     {tab === "fiscal" ? <FiscalConfigurationForm organizationId={company.id} initialConfiguration={fiscalReadiness} /> : null}
     {tab === "certificate" && certificado === "falhou" ? <div className="alert error" role="alert">A empresa foi cadastrada, mas o certificado A1 não foi gravado. Envie o arquivo e a senha de novo abaixo.</div> : null}
     {tab === "certificate" ? canReadCertificate ? <CertificateManager organizationId={company.id} organizationTaxId={company.tax_id} initialCertificate={certificateResult.data} canWrite={canManageCertificate} /> : <Notice title="Certificado" text="Seu perfil não pode consultar certificados." /> : null}

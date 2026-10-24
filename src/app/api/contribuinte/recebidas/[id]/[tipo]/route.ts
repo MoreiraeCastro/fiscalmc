@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
 import { recebidaPorId } from "@/lib/contribuinte/recebidas";
-import { getConfiguredNFSeEnvironment } from "@/lib/nfse/environments";
-import { SefinRestrictedReconciliationClient } from "@/lib/nfse/reconciliation/client";
+import { montarDanfse } from "@/lib/nfse/danfse/modelo";
+import { gerarDanfsePdf } from "@/lib/nfse/danfse/pdf";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/observability/logger";
 
@@ -22,12 +22,13 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   if (tipo === "xml") {
     return new NextResponse(nota.xml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Content-Disposition": `attachment; filename="${nome}.xml"`, "Cache-Control": "private, no-store" } });
   }
-  try {
-    const danfse = await new SefinRestrictedReconciliationClient(undefined, getConfiguredNFSeEnvironment()).getDanfseByAccessKey({ organizationId: empresa.id, accessKey: nota.access_key });
-    if (!danfse) return NextResponse.json({ error: "O DANFS-e desta nota ainda não está disponível no ADN." }, { status: 404 });
-    return new NextResponse(new Uint8Array(danfse.pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${nome}.pdf"`, "Cache-Control": "private, no-store" } });
-  } catch (error) {
-    logEvent("warn", "RECEIVED_DANFSE_FAILED", { organizationId: empresa.id, code: (error as { code?: string }).code ?? "UNKNOWN" });
-    return NextResponse.json({ error: "Não foi possível baixar o DANFS-e agora. Tente o XML ou de novo em instantes." }, { status: 502 });
+  // A API de DANFSe do ADN foi suspensa em 01/07/2026 (NT 008/2026): o DANFSe sai daqui, do XML distribuído, no leiaute nacional.
+  const { data: eventos } = await createAdminClient().from("received_documents").select("event_type").eq("organization_id", empresa.id).eq("access_key", nota.access_key).eq("document_type", "EVENTO");
+  const substituida = (eventos ?? []).some((evento) => evento.event_type === "CANCELAMENTO_POR_SUBSTITUICAO");
+  const modelo = montarDanfse(nota.xml, { cancelada: Boolean(nota.cancelled_at), substituida });
+  if (!modelo) {
+    logEvent("warn", "RECEIVED_DANFSE_FAILED", { organizationId: empresa.id, code: "XML_FORA_DO_LEIAUTE" });
+    return NextResponse.json({ error: "Não foi possível montar o DANFS-e desta nota. Baixe o XML." }, { status: 422 });
   }
+  return new NextResponse(new Uint8Array(await gerarDanfsePdf(modelo)), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${nome}.pdf"`, "Cache-Control": "private, no-store" } });
 }

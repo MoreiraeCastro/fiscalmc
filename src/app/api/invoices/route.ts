@@ -120,7 +120,10 @@ export async function POST(request:Request){
       admin.from("digital_certificates").select("status,owner_tax_id,valid_until").eq("organization_id",session.organizationId).is("replaced_at",null).maybeSingle(),
       admin.from("client_accesses").select("enabled").eq("organization_id",session.organizationId).eq("enabled",true).maybeSingle(),
     ]);
-    if(!organization||(effective.customerId&&!customer)||!service||!profile)throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","Uma configuração fiscal desta empresa precisa ser revisada pelo escritório antes da emissão.");
+    if(!organization)throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","Empresa não encontrada.");
+    if(effective.customerId&&!customer)throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","O tomador escolhido não está mais cadastrado nesta empresa. Volte ao passo Pessoas e escolha o tomador de novo.");
+    if(!service)throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","O serviço escolhido não está pronto para emissão. Volte ao passo Serviço e escolha o código de novo.");
+    if(!profile)throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","A configuração fiscal da empresa ainda não existe. O escritório cadastra em Empresa → Configuração fiscal.");
     // Tomador no exterior: a SEFIN exige o grupo de comércio exterior (E0330).
     if(customer?.person_type==="FOREIGN"&&!effective.extras?.foreignTrade)throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","Tomador no exterior: informe os dados de comércio exterior no passo Serviço.");
     stage="READINESS";

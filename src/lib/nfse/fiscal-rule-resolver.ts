@@ -14,13 +14,13 @@ export type FiscalResolutionInput={organizationId?:string;municipalityCode:strin
 export type FiscalResolution={municipalityCode:string;nationalTaxCode:string;municipalServiceCode?:string;iss:{taxation:"1"|"2"|"3"|"4";rateBasisPoints?:number;/** Só para a prévia: a alíquota que o município parametrizou, quando a DPS sai sem pAliq. */parametrizedRateBasisPoints?:number;rateSource:IssRateSource;withholdingType:"1"|"2"|"3";source:"MUNICIPAL_INTEGRATION"|"ACCEPTED_PRODUCTION_DPS"|"OFFICE_PARAMETER"};retention:{officialRulesChecked:boolean};dpsConfiguration:z.infer<typeof dpsTaxConfigurationSchema>;issuerMunicipalRegistrationEmission:"SEND"|"OMIT";source:"MUNICIPAL_PARAMETERS"|"ACCEPTED_PRODUCTION_DPS"|"OFFICE_PARAMETER";validity:{validFrom:string;validUntil?:string};manualRateSourceNote?:string};
 
 export async function resolveFiscalConfiguration(input:FiscalResolutionInput):Promise<FiscalResolution>{
-  if(!input.reviewedAt&&!input.automaticProfile)throw incomplete();
+  if(!input.reviewedAt&&!input.automaticProfile)throw incomplete(MSG.perfil);
   let dpsConfiguration:z.infer<typeof dpsTaxConfigurationSchema>;
   try{const stored=storedDpsTaxConfigurationSchema.parse(input.dpsConfiguration);dpsConfiguration="version" in stored?(stored.technical??(() => {throw new Error("TECHNICAL_CONFIGURATION_PENDING");})()):stored;}
-  catch{throw incomplete();}
+  catch{throw incomplete(MSG.perfil);}
   const issuerMunicipalRegistrationEmission=dpsConfiguration.issuerMunicipalRegistrationEmission?.mode??"SEND";
   const parsedRateSource=issRateSourceSchema.safeParse(input.issRateSource);
-  if(!input.issTaxation||!parsedRateSource.success)throw incomplete();
+  if(!input.issTaxation||!parsedRateSource.success)throw incomplete(MSG.tributacao);
   const issRateSource=parsedRateSource.data;
   // Isento/imune has no municipal rate to look up — 0% is the definitionally
   // correct answer, not a guess, so the municipal service code (the rate
@@ -28,29 +28,30 @@ export async function resolveFiscalConfiguration(input:FiscalResolutionInput):Pr
   if(input.issTaxation==="3"||input.issTaxation==="4"){
     return{municipalityCode:input.municipalityCode,nationalTaxCode:input.nationalTaxCode,iss:{taxation:input.issTaxation,rateSource:issRateSource,withholdingType:dpsConfiguration.iss.withholdingType,source:"MUNICIPAL_INTEGRATION",...(issRateSource==="EMITTER_PROVIDED"?{rateBasisPoints:0}:{})},retention:{officialRulesChecked:false},dpsConfiguration,issuerMunicipalRegistrationEmission,source:"MUNICIPAL_PARAMETERS",validity:{validFrom:input.serviceDate}};
   }
-  if(issRateSource==="PARAMETRIZED_BY_NATIONAL"&&input.automaticService&&!hasFiscalReference(input.fiscalReference)){
+  // Vale para o serviço automático e para o do escritório que já tem o código complementar: um caminho só, sem alíquota digitada.
+  if(issRateSource==="PARAMETRIZED_BY_NATIONAL"&&!hasFiscalReference(input.fiscalReference)&&(input.automaticService||input.municipalServiceCode)){
     // Como o Emissor Nacional: a DPS sai sem pAliq e a Receita aplica a alíquota do município. Antes, confere nos parâmetros do
     // município que o código existe, tem incidência e não tem retenção obrigatória (o portal ainda não pergunta pela retenção).
-    if(!input.municipalServiceCode)throw incomplete();
+    if(!input.municipalServiceCode)throw incomplete(MSG.codigoComplementar);
     const serviceCode=parseMunicipalServiceCode(input.municipalServiceCode);
     const provider=new MunicipalParametersProvider(new MtlsHttpClient(new OrganizationCertificateProvider()),undefined,input.organizationId);
     const[rule,retentions]=await Promise.all([cachedRule(input.municipalityCode,serviceCode,input.serviceDate),provider.getRetentions({municipalityCode:input.municipalityCode,competence:input.serviceDate})]);
     const current=rule??await fetchRule(input.municipalityCode,serviceCode,input.serviceDate,provider);
-    if(current.incidence!=="SIM"||current.iss_rate_percent===null)throw incomplete();
+    if(current.incidence!=="SIM"||current.iss_rate_percent===null)throw incomplete(MSG.semIncidencia);
     if(requiresMunicipalRetention(retentions,serviceCode,input.serviceDate))throw new SafeFiscalError("MUNICIPAL_RETENTION_REQUIRED","Neste município o ISS deste serviço é retido pelo tomador. Peça ao escritório para configurar este serviço antes de emitir.");
     return{municipalityCode:input.municipalityCode,nationalTaxCode:input.nationalTaxCode,municipalServiceCode:serviceCode,iss:{taxation:input.issTaxation,parametrizedRateBasisPoints:issPercentToBasisPoints(Number(current.iss_rate_percent)),rateSource:issRateSource,withholdingType:dpsConfiguration.iss.withholdingType,source:"MUNICIPAL_INTEGRATION"},retention:{officialRulesChecked:true},dpsConfiguration,issuerMunicipalRegistrationEmission,source:"MUNICIPAL_PARAMETERS",validity:{validFrom:current.valid_from,...(current.valid_until?{validUntil:current.valid_until}:{})}};
   }
   if(issRateSource==="PARAMETRIZED_BY_NATIONAL"){
-    if(!input.dpsMunicipalTaxCode||!matchesAcceptedProductionDpsReference(input.fiscalReference,{nationalTaxCode:input.nationalTaxCode,municipalTaxCode:input.dpsMunicipalTaxCode,nbsCode:input.nbsCode}))throw incomplete();
+    if(!input.dpsMunicipalTaxCode||!matchesAcceptedProductionDpsReference(input.fiscalReference,{nationalTaxCode:input.nationalTaxCode,municipalTaxCode:input.dpsMunicipalTaxCode,nbsCode:input.nbsCode}))throw incomplete(MSG.referencia);
     const reference=input.fiscalReference as {referenceCompetence:string;issTaxation:string;issWithholding:string};
-    if(reference.issTaxation!==input.issTaxation||reference.issWithholding!==dpsConfiguration.iss.withholdingType)throw incomplete();
+    if(reference.issTaxation!==input.issTaxation||reference.issWithholding!==dpsConfiguration.iss.withholdingType)throw incomplete(MSG.referencia);
     return{municipalityCode:input.municipalityCode,nationalTaxCode:input.nationalTaxCode,iss:{taxation:input.issTaxation,rateSource:issRateSource,withholdingType:dpsConfiguration.iss.withholdingType,source:"ACCEPTED_PRODUCTION_DPS"},retention:{officialRulesChecked:false},dpsConfiguration,issuerMunicipalRegistrationEmission,source:"ACCEPTED_PRODUCTION_DPS",validity:{validFrom:reference.referenceCompetence}};
   }
   if(!input.municipalServiceCode){
     // No municipal mapping on file for this municipality/service — rather
     // than block issuance entirely, accept a rate the office confirms and
     // cites at the moment of emission (never silently defaulted or guessed).
-    if(input.manualRateBasisPoints===undefined||!input.manualRateSourceNote?.trim())throw new SafeFiscalError("FISCAL_SERVICE_MAPPING_MISSING","Uma configuração fiscal desta empresa precisa ser revisada pelo escritório antes da emissão.");
+    if(input.manualRateBasisPoints===undefined||!input.manualRateSourceNote?.trim())throw new SafeFiscalError("FISCAL_SERVICE_MAPPING_MISSING",MSG.codigoComplementar);
     return{municipalityCode:input.municipalityCode,nationalTaxCode:input.nationalTaxCode,iss:{taxation:input.issTaxation,rateBasisPoints:input.manualRateBasisPoints,rateSource:issRateSource,withholdingType:dpsConfiguration.iss.withholdingType,source:"OFFICE_PARAMETER"},retention:{officialRulesChecked:false},dpsConfiguration,issuerMunicipalRegistrationEmission,source:"OFFICE_PARAMETER",validity:{validFrom:input.serviceDate},manualRateSourceNote:input.manualRateSourceNote.trim()};
   }
   const serviceCode=parseMunicipalServiceCode(input.municipalServiceCode);
@@ -63,7 +64,7 @@ export async function resolveFiscalConfiguration(input:FiscalResolutionInput):Pr
     ...(dpsConfiguration.regime.special!=="0"?[provider.getSpecialRegimes({municipalityCode:input.municipalityCode,serviceCode,competence:input.serviceDate})]:[]),
     ...(dpsConfiguration.iss.benefitNumber?[provider.getBenefit({municipalityCode:input.municipalityCode,benefitNumber:dpsConfiguration.iss.benefitNumber,competence:input.serviceDate})]:[]),
   ]);
-  if(rule.incidence!=="SIM"||rule.iss_rate_percent===null)throw incomplete();
+  if(rule.incidence!=="SIM"||rule.iss_rate_percent===null)throw incomplete(MSG.semIncidencia);
   return{municipalityCode:input.municipalityCode,nationalTaxCode:input.nationalTaxCode,municipalServiceCode:serviceCode,iss:{taxation:input.issTaxation,rateBasisPoints:issPercentToBasisPoints(Number(rule.iss_rate_percent)),rateSource:issRateSource,withholdingType:dpsConfiguration.iss.withholdingType,source:"MUNICIPAL_INTEGRATION"},retention:{officialRulesChecked:true},dpsConfiguration,issuerMunicipalRegistrationEmission,source:"MUNICIPAL_PARAMETERS",validity:{validFrom:rule.valid_from,...(rule.valid_until?{validUntil:rule.valid_until}:{})}};
 }
 
@@ -82,7 +83,16 @@ export function requiresMunicipalRetention(retentions:MunicipalRetentions,servic
 /** A coluna guarda {} quando o serviço ainda não tem DPS aceita de referência. */
 function hasFiscalReference(value:unknown){return Boolean(value&&typeof value==="object"&&Object.keys(value).length);}
 
-function incomplete(){return new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","Uma configuração fiscal desta empresa precisa ser revisada pelo escritório antes da emissão.");}
+/** Cada bloqueio diz o que falta e onde corrigir (antes era uma frase só para todos os casos). */
+export const MSG={
+  perfil:"A configuração fiscal da empresa (regime, Simples Nacional, ISS) ainda não foi confirmada. O escritório confirma em Empresa → Configuração fiscal.",
+  tributacao:"O serviço está sem a tributação do ISS. Volte ao passo Serviço e escolha o código de novo.",
+  codigoComplementar:"Falta o Código Complementar Municipal deste serviço. Volte ao passo Serviço e escolha o código complementar: a alíquota vem da Receita, como no Emissor Nacional.",
+  semIncidencia:"O município não cobra ISS neste código complementar (sem incidência). Volte ao passo Serviço e escolha outro código complementar.",
+  referencia:"Este serviço foi configurado a partir de uma nota anterior que não bate mais com ele. Peça ao escritório para revisar o serviço.",
+} as const;
+
+function incomplete(message:string){return new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE",message);}
 async function fetchRule(municipalityCode:string,serviceCode:string,competence:string,provider:MunicipalParametersProvider){
   const response=await provider.getAliquota({municipalityCode,serviceCode,competence});
   const item=response.aliquotas[serviceCode].find(value=>!value.DtFim||value.DtFim>=`${competence}T00:00:00`)??response.aliquotas[serviceCode][0];

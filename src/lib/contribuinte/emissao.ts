@@ -5,7 +5,7 @@ import { getServiceReadiness } from "@/lib/nfse/service-readiness";
 import { resolveFiscalConfiguration } from "@/lib/nfse/fiscal-rule-resolver";
 import { getConfiguredNFSeEnvironment } from "@/lib/nfse/environments";
 import { getFiscalConfigurationReadiness, isFiscalProfileAccepted } from "@/lib/nfse/fiscal-configuration";
-import { isAdnAutomaticService } from "@/lib/services/automatic-service";
+import { isAdnAutomaticService, isSelfSufficientService } from "@/lib/services/automatic-service";
 import { ensureAutomaticTaxProfile } from "@/lib/organizations/automatic-tax-profile";
 import type { DadosRascunho } from "./dps";
 
@@ -84,7 +84,10 @@ export async function servicosProntos(empresaId: string): Promise<ServicoPronto[
       .eq("organization_id", empresaId).eq("active", true).in("workflow_status", ["REVIEWED", "AUTO_READY"]).order("name"),
     db.from("organizations").select("require_office_review").eq("id", empresaId).maybeSingle(),
   ]);
-  return (data ?? []).filter((item) => getServiceReadiness(item).ready && !(empresa?.require_office_review && isAdnAutomaticService(item))).map((item) => {
+  // Serviço do escritório sem código complementar não aparece: escolhendo o código no passo Serviço ele vira automático.
+  // Empresa que exige revisão do escritório não tem o caminho automático, então lá ele continua valendo como está.
+  return (data ?? []).filter((item) => getServiceReadiness(item).ready
+    && (empresa?.require_office_review ? !isAdnAutomaticService(item) : isSelfSufficientService(item))).map((item) => {
     const codigo = relationOne(item.national_service_codes as { display_code: string; description: string } | { display_code: string; description: string }[] | null);
     return {
       id: item.id, nome: item.name, codigo: codigo?.display_code ?? item.national_tax_code, descricaoCodigo: codigo?.description ?? null,

@@ -13,6 +13,22 @@ export function isAdnAutomaticService(service: { workflow_status: string; auto_r
   return service.workflow_status === "AUTO_READY" && service.auto_ready_source === ADN_AUTO_SOURCE;
 }
 
+/** A coluna fiscal_reference guarda {} quando o serviço ainda não tem DPS aceita de referência. */
+export function hasFiscalReference(value: unknown) {
+  return Boolean(value && typeof value === "object" && Object.keys(value).length);
+}
+
+/**
+ * Serviço que já sabe de onde vem a alíquota: tem o código complementar do município (ou de/para), é uma exceção
+ * configurada pelo escritório (imunidade, exportação, não incidência) ou tem uma DPS aceita de referência.
+ * Os demais são completados pelo caminho automático no passo Serviço, em vez de travar a emissão pedindo alíquota.
+ */
+export function isSelfSufficientService(service: { municipal_service_code?: string | null; municipal_service_mapping_id?: string | null; iss_taxation?: string | null; fiscal_reference?: unknown }) {
+  return Boolean(service.municipal_service_code || service.municipal_service_mapping_id)
+    || ["2", "3", "4"].includes(service.iss_taxation ?? "")
+    || hasFiscalReference(service.fiscal_reference);
+}
+
 /** Os 3 dígitos do cTribMun: .000 é o código sem complemento (a DPS sai sem cTribMun). */
 export function dpsMunicipalTaxCodeFrom(municipalServiceCode: string) {
   const sufixo = municipalServiceCode.slice(-3);
@@ -62,11 +78,12 @@ export async function ensureAutomaticService(input: {
   };
 
   const { data: existentes } = await db.from("service_templates").select(campos).eq("organization_id", organizationId).eq("national_service_code_id", catalogo.id);
-  const pronto = (existentes ?? []).find((item) => !isAdnAutomaticService(item) && getServiceReadiness(item).ready);
+  const pronto = (existentes ?? []).find((item) => !isAdnAutomaticService(item) && getServiceReadiness(item).ready && isSelfSufficientService(item));
   if (pronto) return { ok: true, serviceId: pronto.id, created: false };
 
   const automatico = (existentes ?? []).find((item) => isAdnAutomaticService(item));
-  const parado = automatico ?? (existentes ?? []).find((item) => !item.active);
+  // Parado: inativo, ou do escritório mas sem código complementar (seria preciso digitar a alíquota). Vira o automático.
+  const parado = automatico ?? (existentes ?? []).find((item) => !item.active) ?? (existentes ?? []).find((item) => !isSelfSufficientService(item));
   if (parado) {
     const mudou = !automatico || automatico.municipal_service_code !== input.municipalServiceCode || automatico.nbs_code !== input.nbsCode || !automatico.active;
     if (mudou) {

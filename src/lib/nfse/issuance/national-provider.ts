@@ -44,7 +44,9 @@ export class NationalNFSeProvider implements NFSeProvider {
     }
     if(response.status===400){
       const parsed=rejectionSchema.safeParse(response.body);const first=parsed.success?parsed.data.erros[0]:undefined;
-      return{status:"REJECTED",code:first?.Codigo??"SEFIN_REJECTED",safeMessage:"A emissão foi rejeitada e precisa de revisão do escritório.",technicalMessage:first?.Descricao??"Rejeição confirmada pela SEFIN."};
+      const descricao=first?.Descricao?.replace(/\s+/g," ").trim().slice(0,400);
+      // O motivo da Receita é o que diz o que corrigir; antes ficava só no código técnico.
+      return{status:"REJECTED",code:first?.Codigo??"SEFIN_REJECTED",safeMessage:descricao?`${first?.Codigo?`${first.Codigo} - `:""}${descricao}`:"A Receita rejeitou a nota sem informar o motivo.",technicalMessage:first?.Descricao??"Rejeição confirmada pela SEFIN."};
     }
     if(response.status===401||response.status===403)throw new SafeFiscalError("SEFIN_CONFIRMED_NO_EMISSION","A SEFIN recusou a autenticação da transmissão.");
     return{status:"UNKNOWN",dpsIdentifier:input.document.dps.identifier,safeMessage:"Estamos confirmando a situação desta nota."};

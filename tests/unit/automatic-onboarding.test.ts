@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildAutomaticFiscalConfiguration, getFiscalConfigurationReadiness, isFiscalProfileAccepted } from "@/lib/nfse/fiscal-configuration";
 import { nextSuffixes, rateForCompetence, displayNationalCode } from "@/lib/nfse/municipal-parameters/discovery";
 import { dpsMunicipalTaxCodeFrom, isAdnAutomaticService, ADN_AUTO_SOURCE } from "@/lib/services/automatic-service";
-import { requiresMunicipalRetention, resolveFiscalConfiguration } from "@/lib/nfse/fiscal-rule-resolver";
+import { MSG, requiresMunicipalRetention, resolveFiscalConfiguration } from "@/lib/nfse/fiscal-rule-resolver";
 import { findNbs, nbsForLc116 } from "@/lib/organizations/nbs-activity-resolver";
 import { getOrganizationReadiness } from "@/lib/organizations/readiness";
 import { assertDpsReadiness } from "@/lib/nfse/dps/readiness";
@@ -134,8 +134,16 @@ describe("resolvedor: portas do fluxo automático", () => {
     await expect(resolveFiscalConfiguration({ ...base, municipalServiceCode: null, automaticProfile: true, automaticService: true })).rejects.toMatchObject({ code: "FISCAL_CONFIGURATION_INCOMPLETE" });
   });
 
-  it("PARAMETRIZED sem nota de referência continua recusado fora do fluxo automático", async () => {
-    await expect(resolveFiscalConfiguration({ ...base, municipalServiceCode: "17.19.01.000", automaticProfile: true })).rejects.toMatchObject({ code: "FISCAL_CONFIGURATION_INCOMPLETE" });
+  it("serviço do escritório com código complementar segue o caminho automático, sem pedir alíquota", async () => {
+    // Sem rede no teste a consulta aos parâmetros municipais falha; o que importa é não barrar antes por falta de referência ou de alíquota.
+    const erro = await resolveFiscalConfiguration({ ...base, municipalServiceCode: "17.19.01.000", automaticProfile: true }).then(() => null, (error: { code?: string }) => error);
+    expect(erro?.code).not.toBe("FISCAL_CONFIGURATION_INCOMPLETE");
+    expect(erro?.code).not.toBe("FISCAL_SERVICE_MAPPING_MISSING");
+  });
+
+  it("cada bloqueio diz o que falta", async () => {
+    await expect(resolveFiscalConfiguration({ ...base, municipalServiceCode: null, automaticProfile: true, automaticService: true })).rejects.toMatchObject({ safeMessage: MSG.codigoComplementar });
+    await expect(resolveFiscalConfiguration({ ...base, municipalServiceCode: "17.19.01.000", automaticService: true })).rejects.toMatchObject({ safeMessage: MSG.perfil });
   });
 });
 

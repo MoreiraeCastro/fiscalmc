@@ -57,7 +57,8 @@ export async function ensureAutomaticService(input: {
     nbs_code: input.nbsCode,
     iss_taxation: "1",
     iss_rate_source: "PARAMETRIZED_BY_NATIONAL",
-    fiscal_reference: null,
+    // Sem DPS aceita de referência: no banco a coluna é not null e "vazio" é {}.
+    fiscal_reference: {},
   };
 
   const { data: existentes } = await db.from("service_templates").select(campos).eq("organization_id", organizationId).eq("national_service_code_id", catalogo.id);

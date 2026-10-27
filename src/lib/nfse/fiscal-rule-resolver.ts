@@ -28,7 +28,7 @@ export async function resolveFiscalConfiguration(input:FiscalResolutionInput):Pr
   if(input.issTaxation==="3"||input.issTaxation==="4"){
     return{municipalityCode:input.municipalityCode,nationalTaxCode:input.nationalTaxCode,iss:{taxation:input.issTaxation,rateSource:issRateSource,withholdingType:dpsConfiguration.iss.withholdingType,source:"MUNICIPAL_INTEGRATION",...(issRateSource==="EMITTER_PROVIDED"?{rateBasisPoints:0}:{})},retention:{officialRulesChecked:false},dpsConfiguration,issuerMunicipalRegistrationEmission,source:"MUNICIPAL_PARAMETERS",validity:{validFrom:input.serviceDate}};
   }
-  if(issRateSource==="PARAMETRIZED_BY_NATIONAL"&&input.automaticService&&!input.fiscalReference){
+  if(issRateSource==="PARAMETRIZED_BY_NATIONAL"&&input.automaticService&&!hasFiscalReference(input.fiscalReference)){
     // Como o Emissor Nacional: a DPS sai sem pAliq e a Receita aplica a alíquota do município. Antes, confere nos parâmetros do
     // município que o código existe, tem incidência e não tem retenção obrigatória (o portal ainda não pergunta pela retenção).
     if(!input.municipalServiceCode)throw incomplete();
@@ -78,6 +78,9 @@ export function requiresMunicipalRetention(retentions:MunicipalRetentions,servic
   return(retentions.retencoes.retencoesMunicipais??[]).some(regra=>vigente(regra.dataInicioVigencia,regra.dataFimVigencia)
     &&(regra.servicos??[]).some(servico=>servico.codigoCompleto===serviceCode&&(servico.historico??[{dataInicioVigencia:regra.dataInicioVigencia,dataFimVigencia:regra.dataFimVigencia}]).some(h=>vigente(h.dataInicioVigencia,h.dataFimVigencia))));
 }
+
+/** A coluna guarda {} quando o serviço ainda não tem DPS aceita de referência. */
+function hasFiscalReference(value:unknown){return Boolean(value&&typeof value==="object"&&Object.keys(value).length);}
 
 function incomplete(){return new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","Uma configuração fiscal desta empresa precisa ser revisada pelo escritório antes da emissão.");}
 async function fetchRule(municipalityCode:string,serviceCode:string,competence:string,provider:MunicipalParametersProvider){

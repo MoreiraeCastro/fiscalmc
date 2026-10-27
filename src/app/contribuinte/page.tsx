@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { Building2, FilePen, FilePlus2, FileText, Settings, Star } from "lucide-react";
+import { Building2, FilePen, FilePlus2, FileText, Play, Settings, Star } from "lucide-react";
+import { usarFavoritoAction } from "@/app/contribuinte/favoritos/actions";
+import { listarFavoritos } from "@/lib/contribuinte/favoritos";
 import { Aviso, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { TabelaUltimas } from "@/components/contribuinte/tabela-notas";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
@@ -13,14 +15,22 @@ export const metadata = { title: "Página Principal" };
 
 export default async function PaginaPrincipal() {
   const { empresa, escritorio, empresas } = await exigirEmpresa();
-  const [ultimas, rascunhos] = await Promise.all([ultimasEmitidas(empresa.id, hojeBrasilia()), listarRascunhos(empresa.id, 5)]);
+  const [ultimas, rascunhos, favoritos] = await Promise.all([ultimasEmitidas(empresa.id, hojeBrasilia()), listarRascunhos(empresa.id, 5), listarFavoritos(empresa.id)]);
   return <>
     <Trilha itens={[]} />
     {empresa.emissaoBloqueada ? <Aviso tipo="alerta">A emissão desta empresa está <strong>bloqueada</strong> até o escritório concluir o cadastro (certificado, dados fiscais e serviços).</Aviso> : null}
     {!empresa.podeEmitir && !empresa.emissaoBloqueada ? <Aviso tipo="alerta">Seu usuário consulta esta empresa, mas ainda não tem permissão para emitir por ela.</Aviso> : null}
+    {favoritos.length && empresa.podeEmitir ? <Cartao titulo="Emitir com um favorito" acoes={<Link className="pc-link" href="/contribuinte/favoritos">Gerenciar</Link>}>
+      <div className="pc-favoritos-rapidos">
+        {favoritos.map((fav) => <form action={usarFavoritoAction} key={fav.id}>
+          <input type="hidden" name="id" value={fav.id} />
+          <button type="submit" title={`Emitir: ${fav.nome}`}><Play size={15} aria-hidden /><span>{fav.nome}</span></button>
+        </form>)}
+      </div>
+    </Cartao> : null}
     <div className="pc-grade-inicio">
       <Cartao titulo="Rascunhos" className="rascunhos" acoes={rascunhos.length ? <Link className="pc-link" href="/contribuinte/notas/rascunhos">Ver todos</Link> : null}>
-        {rascunhos.length ? <TabelaRascunhos linhas={rascunhos} completa={false} /> : <p className="pc-texto">A emissão de uma nova NFS-e é dividida em 4 passos. Ao passar para o próximo passo, as informações preenchidas serão salvas e listadas aqui, para você continuar depois.</p>}
+        {rascunhos.length ? <TabelaRascunhos linhas={rascunhos} completa={false} /> : <p className="pc-texto">Notas começadas e não emitidas aparecem aqui para você continuar depois. Para repetir uma nota já emitida, use "Emitir de novo" na lista de notas.</p>}
       </Cartao>
       <Cartao titulo="Meus dados" className="dados">
         <dl className="pc-dados">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validarIbsCbs } from "@/lib/contribuinte/dps";
+import { regimeFederal, validarIbsCbs } from "@/lib/contribuinte/dps";
 import { ibsCbsObrigatorio } from "@/lib/nfse/ibs-cbs";
 import { aliquotaEmPontosBase, centavosParaTexto, mascaraValor, passoLiberado, passoPorSlug, previaValores, validarComercioExterior, validarComplemento, validarIntermediario, validarNovoTomador, validarPessoas, validarServico, validarTomadorExterior, validarValores, valorEmCentavos } from "@/lib/contribuinte/dps";
 import { extrasDoRascunho, rascunhoDosExtras } from "@/lib/contribuinte/extras-dps";
@@ -163,3 +163,27 @@ describe("substituição herda os extras da original", () => {
     expect(rascunhoDosExtras(null, 500)).toEqual({ valores: { valorCentavos: 500 } });
   });
 });
+
+describe("PIS/COFINS pelo regime da empresa", () => {
+  const federal = (cst: string, pis = "0,65", cofins = "3,00") => ({ cst, base: "1000,00", pis, cofins, retencao: "0", irrf: "", cs: "", cp: "" });
+  it("regime decide o bloco federal", () => {
+    expect(regimeFederal(true, null)).toBe("simples");
+    expect(regimeFederal(false, "SIMPLES_NACIONAL")).toBe("simples");
+    expect(regimeFederal(false, "LUCRO_PRESUMIDO")).toBe("presumido");
+    expect(regimeFederal(false, "LUCRO_REAL")).toBe("real");
+    expect(regimeFederal(false, null)).toBeNull();
+  });
+  it("CST sem débito leva só o CST e a retenção", () => {
+    expect(validarValores({ valor: "1000,00", aliquota: "", fonte: "", exigeAliquota: false, federal: federal("08") }))
+      .toEqual({ ok: true, valor: { valorCentavos: 100000, federal: { cst: "08", retencaoPisCofins: "0" } } });
+  });
+  it("CST com débito não aceita alíquota zero", () => {
+    expect(validarValores({ valor: "1000,00", aliquota: "", fonte: "", exigeAliquota: false, federal: federal("01", "0", "3,00") }).ok).toBe(false);
+    expect(validarValores({ valor: "1000,00", aliquota: "", fonte: "", exigeAliquota: false, federal: federal("01") }).ok).toBe(true);
+  });
+  it("CST sem débito vai para a DPS sem base nem valores", () => {
+    const { extras } = extrasDoRascunho({ valores: { valorCentavos: 100000, federal: { cst: "08", retencaoPisCofins: "0" } } }, false);
+    expect(extras?.federal?.pisCofins).toEqual({ cst: "08", retention: "0" });
+  });
+});
+

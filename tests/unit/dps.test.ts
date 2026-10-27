@@ -90,6 +90,12 @@ describe("DPS v1.01",()=>{
     expect(readiness.items.find(item=>item.key==="registration")?.ready).toBe(true);
     expect(readiness.overallReady).toBe(true);
   });
+  it("alíquota do Simples Nacional sai em pTotTribSN e passa no XSD",async()=>{
+    const base=modelWithIssuerMunicipalRegistration(false);
+    const xml=buildDpsXml({...base,fiscal:{...base.fiscal,totalTaxes:{simplesRateBasisPoints:600}}});
+    expect(xml).toContain("<totTrib><pTotTribSN>6.00</pTotTribSN></totTrib>");
+    await expect(validateDpsXml(xml)).resolves.toMatchObject({valid:true});
+  });
   it("serializa IM do prestador somente quando a regra é SEND",async()=>{
     const sent=buildDpsXml(modelWithIssuerMunicipalRegistration(true));
     const omitted=buildDpsXml(modelWithIssuerMunicipalRegistration(false));

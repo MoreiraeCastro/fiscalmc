@@ -78,9 +78,11 @@ export async function usarFavoritoAction(formData: FormData) {
   if (!contexto) redirect("/contribuinte/favoritos");
   const favorito = await carregarFavorito(contexto.empresa.id, texto(formData, "id"));
   if (!favorito) redirect("/contribuinte/favoritos");
-  const dados = rascunhoDoFavorito(favorito.dados);
+  // Abre na emissão rápida, já preenchida; tomador no exterior segue na emissão completa.
+  const exterior = Boolean(favorito.dados.tomador?.exterior);
+  const dados = { ...rascunhoDoFavorito(favorito.dados), ...(exterior ? {} : { rapida: true }) };
   const id = await gravarRascunho({ empresaId: contexto.empresa.id, usuarioId: contexto.usuarioId, id: null, dados, passo: passoLiberado(dados) });
-  redirect(`/contribuinte/dps/${id}/${PASSOS[0].slug}`);
+  redirect(exterior ? `/contribuinte/dps/${id}/${PASSOS[0].slug}` : `/contribuinte/rapida?r=${id}&editar=1`);
 }
 
 /** "Salvar como favorito" no passo 4: guarda o serviço, tomador, valor e IBS/CBS deste rascunho. */

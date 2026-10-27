@@ -50,6 +50,8 @@ export async function dadosEmitente(empresaId: string) {
     apuracaoSimples: regime.simpleAssessment ? APURACAO_SIMPLES[regime.simpleAssessment] ?? null : null,
     regimeEspecial: regime.special ? REGIME_ESPECIAL[regime.special] ?? regime.special : null,
     simples: regime.simpleNational ? regime.simpleNational !== "1" : perfil?.tax_regime === "SIMPLES_NACIONAL",
+    /** SIMPLES_NACIONAL, LUCRO_PRESUMIDO ou LUCRO_REAL: decide o bloco de PIS/COFINS da emissão. */
+    regimeTributario: (perfil?.tax_regime as string | null | undefined) ?? null,
   };
 }
 

@@ -6,7 +6,7 @@ import { History, LoaderCircle, Search, X } from "lucide-react";
 import { consultarTomador, salvarRapida, type EstadoPasso } from "@/app/contribuinte/dps/actions";
 import { formatarDocumento } from "@/lib/contribuinte/formato";
 import type { TomadorSalvo } from "@/lib/contribuinte/emissao";
-import { DESCRICAO_MAX, mascaraValor, type ComplementoRascunho, type FederalRascunho, type IbsCbsRascunho, type IntermediarioRascunho } from "@/lib/contribuinte/dps";
+import { DESCRICAO_MAX, mascaraValor, type ComplementoRascunho, type FederalRascunho, type IbsCbsRascunho, type IntermediarioRascunho, type RegimeFederal } from "@/lib/contribuinte/dps";
 import type { CnpjLookupCustomer } from "@/lib/nfse/cnpj-lookup";
 import { Cartao } from "./portal-shell";
 import { Campo, FaixaValidacao, Rodape } from "./campos";
@@ -42,7 +42,7 @@ const CAMPOS_MAIS_OPCOES = /^(competencia|ibs_|interm|descIncond|descCond|cst|ba
  * retenções federais e informações complementares) fica em "Mais opções", com os mesmos padrões da emissão completa.
  * Os nomes dos campos são os mesmos dos passos 1 a 3, para o servidor usar as mesmas regras (salvarRapida).
  */
-export function FormRapida({ rascunhoId, hoje, ibsCbsObrigatorioDesde, tomadores, servicos, nacional, inicial }: {
+export function FormRapida({ regime = null, rascunhoId, hoje, ibsCbsObrigatorioDesde, tomadores, servicos, nacional, inicial }: {
   rascunhoId: string | null;
   hoje: string;
   ibsCbsObrigatorioDesde: string;
@@ -51,6 +51,8 @@ export function FormRapida({ rascunhoId, hoje, ibsCbsObrigatorioDesde, tomadores
   /** Lista nacional (empresa sem exigência de revisão) ou null (só os serviços liberados pelo escritório). */
   nacional: { catalogo: CodigoNacionalOpcao[]; usados: ServicoUsado[] } | null;
   inicial: InicialRapida;
+  /** Regime de PIS/COFINS da empresa: decide o bloco federal. */
+  regime?: RegimeFederal;
 }) {
   const [estado, enviar, salvando] = useActionState<EstadoPasso, FormData>(salvarRapida.bind(null, rascunhoId), { erros: {} });
   const erros = estado.erros;
@@ -187,7 +189,7 @@ export function FormRapida({ rascunhoId, hoje, ibsCbsObrigatorioDesde, tomadores
           <Campo rotulo="Desconto condicionado (R$)" erro={erros.descCond} id="descCond" largura="terco"><input id="descCond" name="descCond" inputMode="numeric" className="num" placeholder="0,00" value={descCond} onChange={(e) => setDescCond(mascaraValor(e.target.value))} /></Campo>
         </div>
       </Cartao>
-      <TributacaoFederal inicial={inicial.federal} valorServico={valor} descIncond={descIncond} erros={erros} />
+      <TributacaoFederal inicial={inicial.federal} valorServico={valor} descIncond={descIncond} erros={erros} regime={regime} />
       <InformacoesComplementares inicial={inicial.complemento ?? {}} erros={erros} />
     </details>
 

@@ -73,6 +73,31 @@ export async function registrarResultado(input: { empresaId: string; id: string;
  * Substituir: cria o rascunho com os dados da nota original (como o portal, que abre os 4 passos preenchidos).
  * Se já houver um rascunho aberto substituindo a mesma nota, reaproveita.
  */
+/**
+ * "Emitir de novo": rascunho da emissão rápida com o tomador, o serviço, a descrição, o valor e a tributação federal
+ * de uma nota já emitida, com competência de hoje. Tomador no exterior segue na emissão completa (4 passos).
+ */
+export async function criarRascunhoRepetindo(input: { empresaId: string; usuarioId: string; notaId: string; hoje: string }): Promise<{ id: string; rapida: boolean } | null> {
+  const db = createAdminClient();
+  const { data: nota } = await db.from("invoices").select("id,status,amount_cents,description,customer_id,service_template_id,dps_extras,customers(person_type,tax_id,foreign_tax_id,legal_name)")
+    .eq("organization_id", input.empresaId).eq("id", input.notaId).maybeSingle();
+  if (!nota || nota.status !== "ISSUED") return null;
+  const tomador = Array.isArray(nota.customers) ? nota.customers[0] : nota.customers;
+  const exterior = tomador?.person_type === "FOREIGN";
+  const extras = rascunhoDosExtras(nota.dps_extras as ExtrasDps | null, nota.amount_cents);
+  const dados: DadosRascunho = {
+    ...(exterior ? {} : { rapida: true }),
+    competencia: input.hoje,
+    ...(nota.customer_id ? { tomador: exterior
+      ? { clienteId: nota.customer_id, documento: tomador?.foreign_tax_id ?? null, nome: tomador?.legal_name ?? "", exterior: true }
+      : { clienteId: nota.customer_id, documento: tomador?.tax_id ?? null, nome: tomador?.legal_name ?? "" } } : { semTomador: true }),
+    servico: { modeloId: nota.service_template_id, descricao: nota.description },
+    ...extras,
+  };
+  const { data, error } = await db.from("invoice_drafts").insert({ organization_id: input.empresaId, step: 3, data: dados, created_by: input.usuarioId, updated_by: input.usuarioId }).select("id").single();
+  return error || !data ? null : { id: data.id as string, rapida: !exterior };
+}
+
 export async function criarRascunhoDeSubstituicao(input: { empresaId: string; usuarioId: string; notaId: string }): Promise<string | null> {
   const db = createAdminClient();
   const { data: nota } = await db.from("invoices").select("id,status,access_key,nfse_number,service_date,amount_cents,description,customer_id,service_template_id,dps_extras,customers(person_type,tax_id,foreign_tax_id,legal_name)")

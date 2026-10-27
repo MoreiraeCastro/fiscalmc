@@ -179,7 +179,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const prestXml = signedXml.match(/<prest>([\s\S]*?)<\/prest>/)?.[1] ?? "";
     const issuerMunicipalRegistrationCompliant = fiscal.issuerMunicipalRegistrationEmission === "OMIT" ? !prestXml.includes("<IM>") : true;
     const totalTaxesCompliant = fiscal.dpsConfiguration.regime.simpleNational === "3"
-      ? !signedXml.includes("<indTotTrib>") && signedXml.includes("<pTotTrib>")
+      ? !signedXml.includes("<indTotTrib>") && (signedXml.includes("<pTotTrib>") || signedXml.includes("<pTotTribSN>"))
       : true;
     const businessRulesPassed = issuerMunicipalRegistrationCompliant && !prestXml.includes("<xNome>") && !prestXml.includes("<end>") && totalTaxesCompliant;
     // These check that the signed DPS actually reflects the service/operation

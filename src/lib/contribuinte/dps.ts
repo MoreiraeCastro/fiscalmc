@@ -226,6 +226,18 @@ export const CST_PIS_COFINS = {
   "04": "Operação Tributável monofásica - Revenda a Alíquota Zero", "05": "Operação Tributável por Substituição Tributária", "06": "Operação Tributável a Alíquota Zero", "07": "Operação Isenta da Contribuição",
   "08": "Operação sem Incidência da Contribuição", "09": "Operação com Suspensão da Contribuição", "49": "Outras Operações de Saída",
 } as const;
+/** CSTs sem débito (alíquota zero, isenta, sem incidência, suspensão): a nota leva só o CST, sem base nem alíquotas. */
+export const CST_SEM_VALOR = ["04", "06", "07", "08", "09"];
+
+/** Como a empresa recolhe PIS/COFINS: decide o que o bloco federal mostra e já vem preenchido. */
+export type RegimeFederal = "simples" | "presumido" | "real" | null;
+export function regimeFederal(simples: boolean, taxRegime: string | null | undefined): RegimeFederal {
+  if (simples || taxRegime === "SIMPLES_NACIONAL") return "simples";
+  return taxRegime === "LUCRO_REAL" ? "real" : taxRegime === "LUCRO_PRESUMIDO" ? "presumido" : null;
+}
+/** Alíquotas cumulativas (presumido) e não cumulativas (real), em pontos-base. */
+export const PADRAO_PIS_COFINS: Record<"presumido" | "real", { pisBp: number; cofinsBp: number }> = { presumido: { pisBp: 65, cofinsBp: 300 }, real: { pisBp: 165, cofinsBp: 760 } };
+
 export const RETENCAO_PIS_COFINS = {
   "0": "PIS/COFINS/CSLL Não Retidos", "1": "PIS/COFINS Retidos", "2": "PIS/COFINS Não Retidos", "3": "PIS/COFINS/CSLL Retidos", "4": "PIS/COFINS Retidos, CSLL Não Retido",
   "5": "PIS Retido, COFINS/CSLL Não Retido", "6": "COFINS Retido, PIS/CSLL Não Retido", "7": "PIS Não Retido, COFINS/CSLL Retidos", "8": "PIS/COFINS Não Retidos, CSLL Retido", "9": "COFINS Não Retido, PIS/CSLL Retidos",
@@ -250,13 +262,19 @@ function validarFederal(f: EntradaFederal, valorCentavos: number | null, erros: 
   if (cs === null) erros.cs = "Valor inválido";
   if (cp === null) erros.cp = "Valor inválido";
   let federal: FederalRascunho = { cst: cst || "00", ...(irrf ? { irrfCentavos: irrf } : {}), ...(cs ? { csCentavos: cs } : {}), ...(cp ? { cpCentavos: cp } : {}) };
-  if (cst && cst !== "00") {
+  if (cst && CST_SEM_VALOR.includes(cst)) {
+    // Sem débito: só o CST e o tipo de retenção; base e alíquotas não vão na nota.
+    if (!(f.retencao in RETENCAO_PIS_COFINS)) erros.retencao = OBRIGATORIO;
+    else federal = { ...federal, retencaoPisCofins: f.retencao };
+  } else if (cst && cst !== "00") {
     const base = f.base.trim() ? valorEmCentavos(f.base) : null;
     const pis = f.pis.trim() ? aliquotaEmPontosBase(f.pis) : null;
     const cofins = f.cofins.trim() ? aliquotaEmPontosBase(f.cofins) : null;
     if (!f.base.trim()) erros.base = OBRIGATORIO; else if (base === null) erros.base = "Valor inválido";
     if (!f.pis.trim()) erros.pis = OBRIGATORIO; else if (pis === null) erros.pis = "Alíquota inválida";
+    else if (pis === 0) erros.pis = "Com este CST a alíquota não pode ser zero. Para operação sem débito, use o CST 06, 07 ou 08";
     if (!f.cofins.trim()) erros.cofins = OBRIGATORIO; else if (cofins === null) erros.cofins = "Alíquota inválida";
+    else if (cofins === 0) erros.cofins = "Com este CST a alíquota não pode ser zero. Para operação sem débito, use o CST 06, 07 ou 08";
     if (!(f.retencao in RETENCAO_PIS_COFINS)) erros.retencao = OBRIGATORIO;
     if (base !== null && pis !== null && cofins !== null) federal = { ...federal, baseCentavos: base, pisBp: pis, cofinsBp: cofins, retencaoPisCofins: f.retencao };
   }

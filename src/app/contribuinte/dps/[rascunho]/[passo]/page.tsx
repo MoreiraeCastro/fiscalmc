@@ -7,7 +7,7 @@ import { FormServico } from "@/components/contribuinte/form-servico";
 import { FormValores, type PreviaTela } from "@/components/contribuinte/form-valores";
 import { aliquotaTexto, RevisaoEmissao } from "@/components/contribuinte/revisao-emissao";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
-import { centavosParaTexto, passoLiberado, passoPorSlug, type DadosRascunho } from "@/lib/contribuinte/dps";
+import { regimeFederal, centavosParaTexto, passoLiberado, passoPorSlug, type DadosRascunho } from "@/lib/contribuinte/dps";
 import { getConfiguredNFSeEnvironment } from "@/lib/nfse/environments";
 import { IBS_CBS_OBRIGATORIO_DESDE, IBS_CBS_PADRAO } from "@/lib/nfse/ibs-cbs";
 import { catalogoNacional, dadosEmitente, modoEmissao, previaTributacao, servicosProntos, tomadoresSalvos, type Previa } from "@/lib/contribuinte/emissao";
@@ -90,7 +90,7 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
     const servico = servicos.find((item) => item.id === dados.servico?.modeloId);
     const [emitente, previa] = await Promise.all([dadosEmitente(empresa.id), previaTributacao(empresa.id, dados)]);
     const exigeAliquota = Boolean(escritorio && servico?.exigeAliquotaManual);
-    return <>{cabecalho}<FormValores rascunhoId={rascunhoId!} simples={emitente.simples} exigeAliquota={exigeAliquota} previa={previaParaTela(previa)}
+    return <>{cabecalho}<FormValores rascunhoId={rascunhoId!} simples={emitente.simples} regime={regimeFederal(emitente.simples, emitente.regimeTributario)} exigeAliquota={exigeAliquota} previa={previaParaTela(previa)}
       substituicao={subst ? { motivoCodigo: subst.motivoCodigo ?? "", motivo: subst.motivo ?? "" } : undefined}
       inicial={{ valor: dados.valores ? centavosParaTexto(dados.valores.valorCentavos) : "", aliquota: dados.valores?.aliquotaManualBp !== undefined ? (dados.valores.aliquotaManualBp / 100).toFixed(2).replace(".", ",") : "", fonte: dados.valores?.fonteAliquota ?? "", descIncond: dados.valores?.descIncondCentavos ? centavosParaTexto(dados.valores.descIncondCentavos) : "", descCond: dados.valores?.descCondCentavos ? centavosParaTexto(dados.valores.descCondCentavos) : "", federal: dados.valores?.federal ?? null }} /></>;
   }

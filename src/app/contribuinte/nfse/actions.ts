@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
 import { validarCancelamento, type Erros } from "@/lib/contribuinte/dps";
-import { criarRascunhoDeSubstituicao } from "@/lib/contribuinte/rascunhos";
+import { hojeBrasilia } from "@/lib/contribuinte/formato";
+import { criarRascunhoDeSubstituicao, criarRascunhoRepetindo } from "@/lib/contribuinte/rascunhos";
 import { SafeFiscalError } from "@/lib/nfse/errors";
 import { cancelInvoice, reconcileCancellation } from "@/lib/nfse/events/service";
 
@@ -15,6 +16,16 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function escritorioQueEmite() {
   const contexto = await exigirEmpresa();
   return contexto.escritorio && contexto.empresa.podeEmitir ? contexto : null;
+}
+
+/** "Emitir de novo": abre a emissão rápida já preenchida com os dados da nota escolhida (competência de hoje). */
+export async function emitirDeNovoAction(formData: FormData) {
+  const { empresa, usuarioId } = await exigirEmpresa();
+  const notaId = String(formData.get("notaId") ?? "");
+  if (!empresa.podeEmitir || !UUID.test(notaId)) redirect("/contribuinte/notas/emitidas");
+  const rascunho = await criarRascunhoRepetindo({ empresaId: empresa.id, usuarioId, notaId, hoje: hojeBrasilia() });
+  if (!rascunho) redirect("/contribuinte/notas/emitidas");
+  redirect(rascunho.rapida ? `/contribuinte/rapida?r=${rascunho.id}&editar=1` : `/contribuinte/dps/${rascunho.id}/pessoas`);
 }
 
 /** "Cancelar NFS-e" (escritório): transmite o evento 101101 à SEFIN. */

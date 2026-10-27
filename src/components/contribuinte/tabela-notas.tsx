@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Eye } from "lucide-react";
+import { CopyPlus, Eye } from "lucide-react";
+import { emitirDeNovoAction } from "@/app/contribuinte/nfse/actions";
 import { apiUrl } from "@/lib/base-path";
 import { rotasLegadas } from "@/lib/contribuinte/contexto";
 import { formatarCompetencia, formatarDataHora, formatarValor, pessoa, situacaoNota } from "@/lib/contribuinte/formato";
@@ -26,7 +27,7 @@ export function TabelaNotas({ linhas, municipio, escritorio }: { linhas: NotaLin
           <td>{municipio}</td>
           <td className="num">{formatarValor(nota.valorCentavos)}</td>
           <td><SituacaoNota status={nota.status} /></td>
-          <td className="acoes"><MenuNota visualizar={rotas.visualizar(nota.id)} xml={apiUrl(rotas.documento(nota.id, "NFSE_XML"))} danfse={apiUrl(rotas.documento(nota.id, "PDF"))} gerada={gerada} emitida={nota.status === "ISSUED"} /></td>
+          <td className="acoes"><MenuNota visualizar={rotas.visualizar(nota.id)} xml={apiUrl(rotas.documento(nota.id, "NFSE_XML"))} danfse={apiUrl(rotas.documento(nota.id, "PDF"))} gerada={gerada} emitida={nota.status === "ISSUED"} notaId={nota.id} /></td>
         </tr>;
       })}</tbody>
     </table>
@@ -43,7 +44,10 @@ export function TabelaUltimas({ linhas, escritorio }: { linhas: NotaLinha[]; esc
         <td className="nowrap">{formatarDataHora(nota.geracao)}</td>
         <td>{pessoa(nota.emitidaPara.documento, nota.emitidaPara.nome)}</td>
         <td className="num">{formatarValor(nota.valorCentavos)}</td>
-        <td className="acoes"><Link className="pc-icone-acao" href={rotas.visualizar(nota.id)} title="Visualizar" aria-label="Visualizar"><Eye size={17} aria-hidden /></Link></td>
+        <td className="acoes">
+          {nota.status === "ISSUED" ? <form action={emitirDeNovoAction} className="pc-inline"><input type="hidden" name="notaId" value={nota.id} /><button type="submit" className="pc-icone-acao" title="Emitir de novo" aria-label="Emitir de novo"><CopyPlus size={17} aria-hidden /></button></form> : null}
+          <Link className="pc-icone-acao" href={rotas.visualizar(nota.id)} title="Visualizar" aria-label="Visualizar"><Eye size={17} aria-hidden /></Link>
+        </td>
       </tr>)}</tbody>
     </table>
   </div>;

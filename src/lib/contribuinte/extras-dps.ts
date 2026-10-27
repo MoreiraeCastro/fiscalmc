@@ -6,7 +6,7 @@ export type ExtrasDps = {
   complement?: { technicalDocument?: string; referenceDocument?: string; purchaseOrder?: string; text?: string };
   foreignTrade?: { mode: string; relationship: string; currencyCode: string; amountInCurrencyCents: number; providerSupport: string; customerSupport: string; temporaryGoods: string; importDeclaration?: string; exportRegistration?: string; shareWithMdic: "0" | "1" };
   values?: { unconditionalDiscountCents?: number; conditionalDiscountCents?: number };
-  federal?: { pisCofins?: { cst: string; baseCents: number; pisBasisPoints: number; cofinsBasisPoints: number; pisCents: number; cofinsCents: number; retention?: string }; socialSecurityCents?: number; irrfCents?: number; csllCents?: number };
+  federal?: { pisCofins?: { cst: string; baseCents?: number; pisBasisPoints?: number; cofinsBasisPoints?: number; pisCents?: number; cofinsCents?: number; retention?: string }; socialSecurityCents?: number; irrfCents?: number; csllCents?: number };
 };
 
 /** Caminho de volta (substituição): os extras gravados na nota original preenchem o rascunho da substituta. */
@@ -52,7 +52,7 @@ export function extrasDoRascunho(dados: DadosRascunho, tomadorExterior: boolean)
   if (f) {
     const pisCofins = f.cst !== "00" && f.baseCentavos !== undefined && f.pisBp !== undefined && f.cofinsBp !== undefined
       ? (() => { const debitos = debitosPisCofins(f); return { cst: f.cst, baseCents: f.baseCentavos!, pisBasisPoints: f.pisBp!, cofinsBasisPoints: f.cofinsBp!, pisCents: debitos.pis, cofinsCents: debitos.cofins, ...(f.retencaoPisCofins ? { retention: f.retencaoPisCofins } : {}) }; })()
-      : undefined;
+      : f.cst !== "00" ? { cst: f.cst, ...(f.retencaoPisCofins ? { retention: f.retencaoPisCofins } : {}) } : undefined;
     const federal = { ...(pisCofins ? { pisCofins } : {}), ...(f.cpCentavos ? { socialSecurityCents: f.cpCentavos } : {}), ...(f.irrfCentavos ? { irrfCents: f.irrfCentavos } : {}), ...(f.csCentavos ? { csllCents: f.csCentavos } : {}) };
     if (Object.keys(federal).length) extras.federal = federal;
   }

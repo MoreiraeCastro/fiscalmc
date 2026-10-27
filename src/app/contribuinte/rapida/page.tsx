@@ -4,8 +4,8 @@ import { Aviso, Trilha } from "@/components/contribuinte/portal-shell";
 import { FormRapida, type InicialRapida } from "@/components/contribuinte/form-rapida";
 import { RevisaoEmissao } from "@/components/contribuinte/revisao-emissao";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
-import { centavosParaTexto, passoLiberado } from "@/lib/contribuinte/dps";
-import { catalogoNacional, modoEmissao, servicosProntos, tomadoresSalvos, ultimoServicoUsado } from "@/lib/contribuinte/emissao";
+import { centavosParaTexto, passoLiberado, regimeFederal } from "@/lib/contribuinte/dps";
+import { catalogoNacional, dadosEmitente, modoEmissao, servicosProntos, tomadoresSalvos, ultimoServicoUsado } from "@/lib/contribuinte/emissao";
 import { hojeBrasilia } from "@/lib/contribuinte/formato";
 import { carregarRascunho } from "@/lib/contribuinte/rascunhos";
 import { getConfiguredNFSeEnvironment } from "@/lib/nfse/environments";
@@ -44,10 +44,11 @@ export default async function EmissaoRapidaPage({ searchParams }: { searchParams
   }
 
   const hoje = hojeBrasilia();
-  const [tomadores, catalogo, ultimo] = await Promise.all([
+  const [tomadores, catalogo, ultimo, emitente] = await Promise.all([
     tomadoresSalvos(empresa.id),
     modo.exigeRevisao ? Promise.resolve([]) : catalogoNacional(),
     rascunho ? Promise.resolve(null) : ultimoServicoUsado(empresa.id),
+    dadosEmitente(empresa.id),
   ]);
   const dados = rascunho?.dados ?? {};
   // Sem rascunho: o serviço e a descrição da última nota da empresa (a maioria emite sempre o mesmo).
@@ -70,7 +71,7 @@ export default async function EmissaoRapidaPage({ searchParams }: { searchParams
   };
   return <>{cabecalho}
     {!servicos.length && modo.exigeRevisao ? <Aviso tipo="alerta">Esta empresa ainda não tem serviço liberado pelo escritório.</Aviso> : null}
-    <FormRapida rascunhoId={rascunho?.id ?? null} hoje={hoje} ibsCbsObrigatorioDesde={IBS_CBS_OBRIGATORIO_DESDE[getConfiguredNFSeEnvironment()]} tomadores={tomadores} inicial={inicial}
+    <FormRapida rascunhoId={rascunho?.id ?? null} hoje={hoje} regime={regimeFederal(emitente.simples, emitente.regimeTributario)} ibsCbsObrigatorioDesde={IBS_CBS_OBRIGATORIO_DESDE[getConfiguredNFSeEnvironment()]} tomadores={tomadores} inicial={inicial}
       servicos={servicos.map((item) => ({ id: item.id, nome: item.nome, codigo: item.codigo, descricaoCodigo: item.descricaoCodigo, descricaoPadrao: item.descricaoPadrao }))}
       nacional={modo.exigeRevisao ? null : { catalogo, usados: servicos.map((item) => ({ id: item.id, codigoNacionalId: item.codigoNacionalId, codigoMunicipal: item.codigoMunicipal, nbs: item.nbs, automatico: item.automatico })) }} />
   </>;

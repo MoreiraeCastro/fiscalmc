@@ -39,7 +39,8 @@ type Mapping = { id: string; municipal_service_code: string; valid_from: string 
 type NbsCandidate = { nbsCode: string; nbsDisplayCode: string; nbsDescription: string };
 type FormState = { name: string; defaultDescription: string; municipalServiceMappingId: string | null; dpsMunicipalTaxCode: string; dpsMunicipalTaxCodeSource: string; serviceLocationMunicipalityCode: string; nbsCode: string; issTaxation: string; issRateSource: string; reviewNote: string };
 const blank: FormState = { name: "", defaultDescription: "", municipalServiceMappingId: null, dpsMunicipalTaxCode: "", dpsMunicipalTaxCodeSource: "", serviceLocationMunicipalityCode: "", nbsCode: "", issTaxation: "", issRateSource: "EMITTER_PROVIDED", reviewNote: "" };
-const issTaxationOptions = [["1", "Tributável no município"], ["2", "Tributável fora do município"], ["3", "Isento"], ["4", "Imune / não incidência"]] as const;
+// Mesmos códigos e nomes do tribISSQN da DPS nacional: o valor escolhido vai direto para a nota.
+const issTaxationOptions = [["1", "1 - Operação tributável"], ["2", "2 - Imunidade"], ["3", "3 - Exportação de serviço"], ["4", "4 - Não incidência"]] as const;
 const issRateSourceOptions = [["EMITTER_PROVIDED", "Confirmada pelo escritório (Econet, planilha, etc.)"], ["PARAMETRIZED_BY_NATIONAL", "Parametrizada pelo Sistema Nacional"]] as const;
 
 function statusTone(status: ServiceWorkflowStatus): "success" | "warning" | "danger" | "neutral" | "info" {

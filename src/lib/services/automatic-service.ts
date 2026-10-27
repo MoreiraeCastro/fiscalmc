@@ -70,7 +70,7 @@ export async function ensureAutomaticService(input: {
     const mudou = !automatico || automatico.municipal_service_code !== input.municipalServiceCode || automatico.nbs_code !== input.nbsCode || !automatico.active;
     if (mudou) {
       const { error } = await db.from("service_templates").update({ ...fiscal, workflow_status: "AUTO_READY", active: true, reviewed_at: null, reviewed_by: null, auto_ready_at: agora, auto_ready_source: ADN_AUTO_SOURCE }).eq("id", parado.id).eq("organization_id", organizationId);
-      if (error) return { ok: false, erro: "Não foi possível preparar o serviço para emissão." };
+      if (error) { logFalha("update", error); return { ok: false, erro: "Não foi possível preparar o serviço para emissão." }; }
       await auditar(db, input, parado.id);
     }
     return { ok: true, serviceId: parado.id, created: false };
@@ -81,9 +81,14 @@ export async function ensureAutomaticService(input: {
   let inserido = await db.from("service_templates").insert({ ...novo, name: nome }).select("id").single();
   // (organization_id, name) é único: se outro serviço já usa a descrição, o nome leva o código na frente.
   if (inserido.error?.code === "23505") inserido = await db.from("service_templates").insert({ ...novo, name: `${input.municipalServiceCode} ${catalogo.description}`.slice(0, 160) }).select("id").single();
-  if (inserido.error || !inserido.data) return { ok: false, erro: "Não foi possível preparar o serviço para emissão." };
+  if (inserido.error || !inserido.data) { logFalha("insert", inserido.error); return { ok: false, erro: "Não foi possível preparar o serviço para emissão." }; }
   await auditar(db, input, inserido.data.id);
   return { ok: true, serviceId: inserido.data.id, created: true };
+}
+
+/** Motivo da recusa do banco (código e mensagem do Postgres, sem dados da empresa) para o log do serviço. */
+function logFalha(operacao: "update" | "insert", error: { code?: string; message?: string; details?: string | null; hint?: string | null } | null) {
+  console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: "error", event: "AUTOMATIC_SERVICE_WRITE_FAILED", operacao, code: error?.code ?? null, message: error?.message ?? null, details: error?.details ?? null, hint: error?.hint ?? null }));
 }
 
 async function auditar(db: SupabaseClient, input: { organizationId: string; createdBy: string; actorType: "OFFICE" | "CLIENT"; municipalServiceCode: string; nbsCode: string }, serviceId: string) {

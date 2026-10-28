@@ -320,3 +320,6 @@ button.pc-icone-acao { border: 0; background: none; cursor: pointer; }
 .pc-favoritos-rapidos button:hover { border-color: var(--orange); background: #fff8f2; }
 .pc-favoritos-rapidos button svg { flex: 0 0 auto; color: var(--orange); }
 .pc-favoritos-rapidos button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Botão com cara de link (ex.: "Procurar em toda a tabela NBS") */
+button.pc-link { justify-self: start; margin-top: 8px; padding: 0; border: 0; background: none; cursor: pointer; text-align: left; }

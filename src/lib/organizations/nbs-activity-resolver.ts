@@ -5,7 +5,8 @@ import nbsTable from "./nbs-v2.json";
 
 type Correlation = { lc116Item: string; lc116Subitem: string; lc116Description: string; nbsCode: string; nbsDisplayCode: string; nbsDescription: string };
 
-export type NbsCandidate = { nbsCode: string; nbsDisplayCode: string; nbsDescription: string };
+/** `oficial`: está na tabela oficial de correlação com o código da LC 116 escolhido. */
+export type NbsCandidate = { nbsCode: string; nbsDisplayCode: string; nbsDescription: string; oficial?: boolean };
 
 const allNbs: NbsCandidate[] = [...(nbsTable as NbsCandidate[])].sort((a, b) => a.nbsDisplayCode.localeCompare(b.nbsDisplayCode));
 
@@ -34,22 +35,18 @@ export function searchNbsCatalog(query: string, limit = 60): NbsCandidate[] {
 }
 
 /**
- * NBS correlacionadas a um item/subitem da LC 116 (o cTribNac começa por eles), como sugestão no passo 2.
- * Junto vai o "Outros…" (.99.00) da mesma posição quando existe: a tabela oficial liga a medicina (04.01) só à
- * 1.2301.22.00, mas na prática o escritório usa a 1.2301.99.00. Com mais de uma sugestão, ninguém é marcado sozinho.
+ * NBS que fazem sentido para um item/subitem da LC 116 (o cTribNac começa por eles), para o passo Serviço:
+ * todas as NBS das mesmas posições (os 5 primeiros dígitos) das que a tabela oficial correlaciona.
+ * A tabela liga a medicina (04.01) só à 1.2301.22.00, mas o grupo 1.2301 (saúde humana) inteiro é possível —
+ * inclusive a 1.2301.99.00 que o escritório usa. As da correlação oficial vêm primeiro, com `oficial`.
  */
 export function nbsForLc116(item: string, subitem: string): NbsCandidate[] {
   const i = String(Number(item));
   const s = String(Number(subitem));
-  const vistos = new Set<string>();
-  const correlated = (correlations as Correlation[])
-    .filter((row) => row.lc116Item === i && row.lc116Subitem === s && !vistos.has(row.nbsCode) && vistos.add(row.nbsCode))
-    .map((row) => ({ nbsCode: row.nbsCode, nbsDisplayCode: row.nbsDisplayCode, nbsDescription: row.nbsDescription }));
-  const others = [...new Set(correlated.map((nbs) => `${nbs.nbsCode.slice(0, 5)}9900`))]
-    .filter((code) => !vistos.has(code))
-    .map((code) => findNbs(code))
-    .filter((nbs): nbs is NbsCandidate => Boolean(nbs));
-  return [...correlated, ...others];
+  const oficiais = new Set((correlations as Correlation[]).filter((row) => row.lc116Item === i && row.lc116Subitem === s).map((row) => row.nbsCode));
+  const posicoes = new Set([...oficiais].map((code) => code.slice(0, 5)));
+  const grupo = allNbs.filter((nbs) => posicoes.has(nbs.nbsCode.slice(0, 5)) || oficiais.has(nbs.nbsCode)).map((nbs) => ({ ...nbs, oficial: oficiais.has(nbs.nbsCode) }));
+  return [...grupo.filter((nbs) => nbs.oficial), ...grupo.filter((nbs) => !nbs.oficial)];
 }
 
 export function findNbs(code: string): NbsCandidate | null {

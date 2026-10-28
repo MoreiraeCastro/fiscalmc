@@ -37,6 +37,7 @@ export function SeletorServicoNacional({ catalogo, usados, inicial, competencia,
   const [nbs, setNbs] = useState(inicial?.automatico ? inicial.nbs ?? "" : "");
   const [filtroNbs, setFiltroNbs] = useState("");
   const [todas, setTodas] = useState<NbsCandidate[] | null>(null);
+  const [tabelaInteira, setTabelaInteira] = useState(false);
   const [consultando, iniciar] = useTransition();
 
   const escolhido = catalogo.find((item) => item.id === codigoId) ?? null;
@@ -66,34 +67,36 @@ export function SeletorServicoNacional({ catalogo, usados, inicial, competencia,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // A tabela NBS inteira (≈900 itens) só vem quando o campo aparece, e uma vez só.
-  const mostraNbs = Boolean(codigoId && resposta?.opcoes && !resposta.existente);
+  // A tabela NBS inteira (≈900 itens) só vem se pedirem, e uma vez só.
   useEffect(() => {
-    if (!mostraNbs || todas) return;
+    if (!tabelaInteira || todas) return;
     let vivo = true;
     todasNbs().then((lista) => { if (vivo) setTodas(lista); });
     return () => { vivo = false; };
-  }, [mostraNbs, todas]);
+  }, [tabelaInteira, todas]);
 
   function escolher(item: CodigoNacionalOpcao) {
     if (item.id === codigoId) return;
     setCodigoId(item.id);
     setResposta(null);
     setFiltroNbs("");
+    setTabelaInteira(false);
     aoEscolherCodigo(item.descricao);
     consultar(item.id, false);
   }
 
   const existente = resposta?.existente;
-  const sugeridas = useMemo(() => new Set((resposta?.nbs ?? []).map((item) => item.nbsCode)), [resposta]);
+  // Lista do serviço: as NBS do mesmo grupo da correlação oficial (as oficiais primeiro); a tabela inteira só se pedirem.
+  const doServico = useMemo(() => resposta?.nbs ?? [], [resposta]);
+  const sugeridas = useMemo(() => new Set(doServico.filter((item) => item.oficial).map((item) => item.nbsCode)), [doServico]);
   const listaNbs = useMemo(() => {
-    const base = todas ?? resposta?.nbs ?? [];
+    const base = tabelaInteira && todas ? todas : doServico;
     const termo = semAcento(filtroNbs.trim());
     const digitos = filtroNbs.replace(/\D/g, "");
     const filtradas = termo ? base.filter((item) => semAcento(item.nbsDescription).includes(termo) || (digitos.length >= 2 && item.nbsCode.startsWith(digitos))) : base;
     return [...filtradas.filter((item) => sugeridas.has(item.nbsCode)), ...filtradas.filter((item) => !sugeridas.has(item.nbsCode))];
-  }, [todas, resposta, filtroNbs, sugeridas]);
-  const nbsEscolhida = (todas ?? resposta?.nbs ?? []).find((item) => item.nbsCode === nbs) ?? null;
+  }, [todas, tabelaInteira, doServico, filtroNbs, sugeridas]);
+  const nbsEscolhida = [...doServico, ...(todas ?? [])].find((item) => item.nbsCode === nbs) ?? null;
 
   return <>
     {existente ? <input type="hidden" name="servico" value={existente.id} /> : <>
@@ -130,14 +133,15 @@ export function SeletorServicoNacional({ catalogo, usados, inicial, competencia,
         </Campo>
         <Campo rotulo="Item da NBS" obrigatorio erro={erros.nbs} id="busca-nbs" largura="inteira">
           <input id="busca-nbs" className="pc-input" placeholder="Digite o código (ex.: 1.2301.99.00) ou parte da descrição" value={filtroNbs} onChange={(e) => setFiltroNbs(e.target.value)} />
-          <p className="pc-nota">{nbsEscolhida ? <>Escolhida: <strong>{nbsEscolhida.nbsDisplayCode} - {nbsEscolhida.nbsDescription}</strong></> : nbs ? <>Escolhida: <strong>{nbs}</strong></> : "Escolha a NBS na lista. As sugeridas para este código vêm primeiro."}</p>
+          <p className="pc-nota">{nbsEscolhida ? <>Escolhida: <strong>{nbsEscolhida.nbsDisplayCode} - {nbsEscolhida.nbsDescription}</strong></> : nbs ? <>Escolhida: <strong>{nbs}</strong></> : tabelaInteira ? "Tabela NBS inteira." : "NBS possíveis para este serviço. A da correspondência oficial vem primeiro."}</p>
           <div className="pc-lista-servicos" role="radiogroup" aria-label="Item da NBS">
             {listaNbs.map((item) => <label key={item.nbsCode} className={item.nbsCode === nbs ? "escolhido" : undefined}>
               <input type="radio" name="_nbs" checked={item.nbsCode === nbs} onChange={() => setNbs(item.nbsCode)} />
-              <span><strong>{item.nbsDisplayCode} - {item.nbsDescription}</strong>{sugeridas.has(item.nbsCode) ? <small>Sugerida para este código</small> : null}</span>
+              <span><strong>{item.nbsDisplayCode} - {item.nbsDescription}</strong>{sugeridas.has(item.nbsCode) ? <small>Correspondência oficial</small> : null}</span>
             </label>)}
-            {!todas ? <p className="pc-nota">Carregando a tabela NBS completa…</p> : !listaNbs.length ? <p className="pc-vazio">Nenhuma NBS encontrada.</p> : null}
+            {tabelaInteira && !todas ? <p className="pc-nota">Carregando a tabela NBS inteira…</p> : !listaNbs.length ? <p className="pc-vazio">Nenhuma NBS encontrada{tabelaInteira ? "" : " neste grupo"}.</p> : null}
           </div>
+          <button type="button" className="pc-link" onClick={() => setTabelaInteira((valor) => !valor)}>{tabelaInteira ? "Voltar às NBS deste serviço" : "Não achou? Procurar em toda a tabela NBS"}</button>
         </Campo>
       </div> : null : null}
   </>;

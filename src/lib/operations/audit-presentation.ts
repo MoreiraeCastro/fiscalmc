@@ -7,6 +7,8 @@ export function presentAuditEvent(action: string) {
     organization_restricted_emission_enabled: { label: "Emissão em homologação habilitada", area: "Emissões" },
     client_catalog_service_auto_ready: { label: "Serviço configurado automaticamente", area: "Serviços" },
     client_catalog_service_needs_review: { label: "Serviço enviado para revisão", area: "Serviços" },
+    invoice_blocked: { label: "Emissão barrada antes do envio", area: "Emissões" },
+    emission_check: { label: "Teste de emissão", area: "Emissões" },
   };
   return labels[action] ?? { label: "Atualização operacional registrada", area: "Operação" };
 }

@@ -955,3 +955,25 @@ textarea.input { min-height:92px; }
 .ne-done td { opacity:.55; }
 .ne-ok { display:inline-flex; align-items:center; gap:6px; color:#1b7a51; font-weight:650; }
 @media (max-width: 860px) { .ne-filter { grid-template-columns:1fr; } }
+
+/* Escritório: teste de emissão da empresa */
+.emission-check { margin-top:16px; }
+.emission-check-verdict { padding:5px 11px; border-radius:999px; font-size:12px; font-weight:750; white-space:nowrap; }
+.emission-check-verdict.ok { background:#e8f5ef; color:#1b7a51; }
+.emission-check-verdict.fail { background:#fdecec; color:#b42318; }
+.emission-check-steps { list-style:none; margin:0; padding:0 18px 6px; display:grid; gap:0; }
+.emission-check-steps li { display:grid; grid-template-columns:26px minmax(0,1fr); gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+.emission-check-steps li:last-child { border-bottom:0; }
+.emission-check-steps strong { display:block; color:var(--navy); font-size:13.5px; }
+.emission-check-steps small { display:block; margin-top:2px; color:var(--muted); font-size:12.5px; line-height:1.45; }
+.emission-check-steps em { display:block; margin-top:4px; color:var(--orange-dark); font-size:12.5px; font-style:normal; font-weight:650; }
+.emission-check-icon { width:24px; height:24px; display:grid; place-items:center; border-radius:50%; }
+.is-ok .emission-check-icon { background:#e8f5ef; color:#1b7a51; }
+.is-warn .emission-check-icon { background:#fff4e0; color:#97600a; }
+.is-fail .emission-check-icon { background:#fdecec; color:#b42318; }
+.is-skip .emission-check-icon { background:#f1f3f7; color:#98a2ae; }
+.is-skip strong, .is-skip small { color:#98a2ae; }
+.emission-check-empty { margin:0; padding:4px 18px 10px; color:var(--muted); font-size:13px; }
+.emission-check-error { margin:0 18px 8px; color:#b42318; font-size:12.5px; }
+.emission-check-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 18px 16px; border-top:1px solid var(--border); }
+.emission-check-actions small { color:var(--muted); font-size:12px; }

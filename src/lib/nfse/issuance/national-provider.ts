@@ -33,7 +33,18 @@ export class NationalNFSeProvider implements NFSeProvider {
   async issue(input: IssueRequest): Promise<IssueResult> {
     const environment=assertTransportAuthorized();
     if(!input.organizationId||!input.preparedPayload)throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","A DPS ainda não está pronta para transmissão.");
-    const response=await this.http.postJsonTracked(`${endpoints[environment]}/nfse`,input.preparedPayload,input.organizationId);
+    return this.result(await this.http.postJsonTracked(`${endpoints[environment]}/nfse`,input.preparedPayload,input.organizationId),input);
+  }
+  /**
+   * Teste de emissão do escritório: manda a DPS (montada no leiaute da restrita) sempre para a Produção Restrita,
+   * que não tem valor fiscal — nunca para a produção, qualquer que seja o ambiente do servidor.
+   */
+  async transmitRestrictedTest(input: IssueRequest): Promise<IssueResult> {
+    if(process.env.NFSE_PROVIDER!=="national")throw new SafeFiscalError("NATIONAL_TRANSMISSION_NOT_AUTHORIZED","A transmissão nacional ainda não foi autorizada.");
+    if(!input.organizationId||!input.preparedPayload)throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","A DPS ainda não está pronta para transmissão.");
+    return this.result(await this.http.postJsonTracked(`${endpoints.PRODUCTION_RESTRICTED}/nfse`,input.preparedPayload,input.organizationId),input);
+  }
+  private result(response: Awaited<ReturnType<MtlsHttpClient["postJsonTracked"]>>, input: IssueRequest): IssueResult {
     if(response.status===201){
       const parsed=successSchema.safeParse(response.body);
       if(!parsed.success)throw new MtlsRequestError("Resposta de emissão inválida.","POSSIBLY_SENT","INVALID_API_RESPONSE");

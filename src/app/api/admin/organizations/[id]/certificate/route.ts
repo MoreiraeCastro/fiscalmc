@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
+import { runEmissionCheck } from "@/lib/operations/emission-check";
 import { z } from "zod";
 import { requireOfficeSession } from "@/lib/auth/session";
 import { can } from "@/lib/security/authorization";
@@ -87,6 +88,9 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
     }
     storagePath=undefined;
     await db.from("audit_logs").insert({organization_id:organizationId,actor_user_id:session.userId,actor_type:"OFFICE",action:current?"certificate_replaced":"certificate_added",entity:"digital_certificate",entity_id:certificateId,safe_metadata:{status}});
+    // Certificado novo: roda o teste de emissão depois da resposta (o resultado aparece na ficha da empresa).
+    const checkedId=organizationId;
+    if(checkedId)after(()=>runEmissionCheck(checkedId,{actorUserId:session.userId}).catch(()=>undefined));
     return NextResponse.json({certificate:{id:certificateId,subject:validation.metadata.subject,issuer:validation.metadata.issuer,serial:validation.metadata.serial,owner_tax_id:validation.metadata.ownerTaxId,valid_from:validation.metadata.validFrom,valid_until:validation.metadata.validUntil,status}},{status:201});
   }catch(error){
     if(storagePath)await createAdminClient().storage.from("a1-certificates").remove([storagePath]);

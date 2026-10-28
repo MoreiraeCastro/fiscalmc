@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireOfficeSession } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { runEmissionCheck } from "@/lib/operations/emission-check";
 import { getServiceTechnicalReadiness } from "@/lib/nfse/service-readiness";
 import { buildOfficeServiceApproval, buildServiceInformationRequest, canOfficeApproveService } from "@/lib/services/workflow";
 
@@ -40,6 +41,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { error } = await db.from("service_templates").update({ ...approval, updated_at: now }).eq("id", serviceId).eq("organization_id", organizationId);
     if (error) throw error;
     await db.from("audit_logs").insert({ organization_id: organizationId, actor_user_id: session.userId, actor_type: "OFFICE", action: "service_reviewed", entity: "service_template", entity_id: serviceId, safe_metadata: {} });
+    after(() => runEmissionCheck(organizationId, { actorUserId: session.userId }).catch(() => undefined));
     return NextResponse.json({ ok: true, workflowStatus: "REVIEWED", reviewedAt: now, reviewedBy: session.displayName });
   } catch (error) {
     return NextResponse.json({ error: error instanceof z.ZodError ? "Informe uma ação de revisão válida." : "Não foi possível concluir a análise do serviço." }, { status: 422 });

@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireOfficeSession } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { runEmissionCheck } from "@/lib/operations/emission-check";
 import { fiscalConfigurationFormSchema,fiscalTechnicalConfigurationSchema,getFiscalConfigurationReadiness,normalizeFiscalConfiguration } from "@/lib/nfse/fiscal-configuration";
 
 const fiscalPatchSchema=z.object({form:fiscalConfigurationFormSchema,technical:fiscalTechnicalConfigurationSchema.optional()});
@@ -38,6 +39,8 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     const {error}=await admin.from("tax_profiles").upsert({organization_id:id,tax_regime:form.taxRegime,dps_configuration:normalizeFiscalConfiguration(form,previous?.dps_configuration,technical),reviewed_at:null,reviewed_by:null,origin:"OFFICE"},{onConflict:"organization_id"});
     if(error)throw error;
     await writeAudit(previous?"tax_profile_updated":"tax_profile_created",id,session.userId);
+    // Configuração mudou: o teste de emissão roda de novo em segundo plano.
+    after(()=>runEmissionCheck(id,{actorUserId:session.userId}).catch(()=>undefined));
     const {data:profile}=await admin.from("tax_profiles").select("tax_regime,dps_configuration,reviewed_at,reviewed_by,origin").eq("organization_id",id).single();
     return NextResponse.json({configuration:getFiscalConfigurationReadiness(profile)});
   }catch(error){

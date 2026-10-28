@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, CircleDashed, LoaderCircle, PlayCircle, X } from "lucide-react";
+import { AlertTriangle, Check, CircleDashed, LoaderCircle, RefreshCw, X } from "lucide-react";
 import { apiUrl } from "@/lib/base-path";
 import type { CheckStatus, CheckStepKey, EmissionCheck } from "@/lib/operations/emission-check";
 
@@ -20,13 +20,14 @@ const ICON: Record<CheckStatus, React.ReactNode> = {
 };
 
 /**
- * Teste de emissão na ficha da empresa: mostra o último resultado e roda de novo. Prova, sem emitir nada com valor
- * fiscal, que a primeira nota vai sair (cadastro, certificado, conexão, configuração, serviço, DPS e Receita).
+ * Teste de emissão na ficha da empresa. Roda sozinho (certificado enviado, configuração fiscal salva, serviço aprovado)
+ * e não aparece quando está tudo certo: só mostra o que impediria a primeira nota e como resolver.
  */
 export function EmissionCheckCard({ organizationId, initial }: { organizationId: string; initial: EmissionCheck | null }) {
   const router = useRouter();
   const [check, setCheck] = useState(initial);
   const [running, setRunning] = useState(false);
+  const [fixed, setFixed] = useState(false);
   const [error, setError] = useState("");
 
   async function run() {
@@ -35,32 +36,33 @@ export function EmissionCheckCard({ organizationId, initial }: { organizationId:
     try {
       const response = await fetch(apiUrl(`/api/admin/organizations/${organizationId}/emission-check`), { method: "POST" });
       const body = await response.json() as EmissionCheck & { error?: string };
-      if (!response.ok) throw new Error(body.error ?? "Não foi possível rodar o teste agora.");
+      if (!response.ok) throw new Error(body.error ?? "Não foi possível testar agora.");
       setCheck(body);
+      setFixed(body.ok);
       router.refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Não foi possível rodar o teste agora.");
+      setError(cause instanceof Error ? cause.message : "Não foi possível testar agora.");
     } finally {
       setRunning(false);
     }
   }
 
-  const fails = check?.steps.filter((s) => s.status === "fail").length ?? 0;
-  return <section className="v2-panel emission-check">
+  if (fixed) return <section className="v2-panel emission-check is-fixed"><p><Check size={16} aria-hidden />Resolvido: a empresa está pronta para emitir.</p></section>;
+  if (!check || check.ok) return null;
+  const fails = check.steps.filter((s) => s.status === "fail");
+  return <section className="v2-panel emission-check" role="alert">
     <div className="v2-panel-heading">
-      <div><h2>Teste de emissão</h2><p>{check ? `Último teste: ${new Date(check.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}` : "Prova que a primeira nota vai sair, sem emitir nada com valor fiscal."}</p></div>
-      {check ? <span className={`emission-check-verdict ${check.ok ? "ok" : "fail"}`}>{check.ok ? "Pronta para emitir" : `${fails} problema(s)`}</span> : null}
+      <div><h2>Esta empresa ainda não consegue emitir</h2><p>Resolva {fails.length === 1 ? "o item abaixo" : "os itens abaixo"} antes da primeira nota.</p></div>
     </div>
-    {check ? <ol className="emission-check-steps">{check.steps.map((step) => <li key={step.key} className={`is-${step.status}`}>
-      <span className="emission-check-icon">{ICON[step.status]}</span>
-      <span><strong>{LABEL[step.key]}</strong><small>{step.detail}</small>{step.fix && step.status !== "ok" ? <em>{step.fix}</em> : null}</span>
-    </li>)}</ol> : <p className="emission-check-empty">Esta empresa ainda não foi testada.</p>}
-    {error ? <p className="emission-check-error" role="alert">{error}</p> : null}
+    <ol className="emission-check-steps">{fails.map((step) => <li key={step.key} className="is-fail">
+      <span className="emission-check-icon">{ICON.fail}</span>
+      <span><strong>{LABEL[step.key]}</strong><small>{step.detail}</small>{step.fix ? <em>{step.fix}</em> : null}</span>
+    </li>)}</ol>
+    {error ? <p className="emission-check-error">{error}</p> : null}
     <div className="emission-check-actions">
       <button type="button" className="button secondary" onClick={run} disabled={running}>
-        {running ? <><LoaderCircle className="spin" size={16} aria-hidden />Testando… (leva até 1 minuto)</> : <><PlayCircle size={16} aria-hidden />{check ? "Rodar o teste de novo" : "Rodar teste de emissão"}</>}
+        {running ? <><LoaderCircle className="spin" size={16} aria-hidden />Conferindo…</> : <><RefreshCw size={16} aria-hidden />Já resolvi, conferir</>}
       </button>
-      <small>Inclui uma nota de teste na Produção Restrita, sem valor fiscal.</small>
     </div>
   </section>;
 }

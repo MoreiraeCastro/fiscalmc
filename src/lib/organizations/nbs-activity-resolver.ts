@@ -1,17 +1,18 @@
 import "server-only";
 import correlations from "./activity-nbs-correlations.json";
+// Tabela NBS 2.0 completa (aba LISTA.NBS_v2.0 do Anexo B do SN NFS-e): só os itens de 9 dígitos, que são os que vão na DPS.
+import nbsTable from "./nbs-v2.json";
 
 type Correlation = { lc116Item: string; lc116Subitem: string; lc116Description: string; nbsCode: string; nbsDisplayCode: string; nbsDescription: string };
 
 export type NbsCandidate = { nbsCode: string; nbsDisplayCode: string; nbsDescription: string };
 
-const allNbs: NbsCandidate[] = (() => {
-  const byCode = new Map<string, NbsCandidate>();
-  for (const row of correlations as Correlation[]) {
-    if (!byCode.has(row.nbsCode)) byCode.set(row.nbsCode, { nbsCode: row.nbsCode, nbsDisplayCode: row.nbsDisplayCode, nbsDescription: row.nbsDescription });
-  }
-  return [...byCode.values()].sort((a, b) => a.nbsDisplayCode.localeCompare(b.nbsDisplayCode));
-})();
+const allNbs: NbsCandidate[] = [...(nbsTable as NbsCandidate[])].sort((a, b) => a.nbsDisplayCode.localeCompare(b.nbsDisplayCode));
+
+/** Todas as NBS que podem ir na DPS, para o seletor completo do passo Serviço. */
+export function allNbsCatalog(): NbsCandidate[] {
+  return allNbs;
+}
 
 /**
  * Free-text search across every NBS code in the official Anexo VIII table,

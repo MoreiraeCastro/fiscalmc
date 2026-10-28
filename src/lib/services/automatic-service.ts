@@ -78,7 +78,8 @@ export async function ensureAutomaticService(input: {
   };
 
   const { data: existentes } = await db.from("service_templates").select(campos).eq("organization_id", organizationId).eq("national_service_code_id", catalogo.id);
-  const pronto = (existentes ?? []).find((item) => !isAdnAutomaticService(item) && getServiceReadiness(item).ready && isSelfSufficientService(item));
+  // O do escritório só vale se tiver a mesma NBS: quem emite pode escolher outra NBS para a nota.
+  const pronto = (existentes ?? []).find((item) => !isAdnAutomaticService(item) && getServiceReadiness(item).ready && isSelfSufficientService(item) && (!item.nbs_code || item.nbs_code === input.nbsCode));
   if (pronto) return { ok: true, serviceId: pronto.id, created: false };
 
   const automatico = (existentes ?? []).find((item) => isAdnAutomaticService(item));

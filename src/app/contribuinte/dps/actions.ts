@@ -10,7 +10,7 @@ import paises from "@/lib/contribuinte/paises.json";
 import { centavosParaTexto, validarComercioExterior, validarComplemento, validarIbsCbs, validarIntermediario, validarMotivoSubstituicao, validarNovoTomador, validarPessoas, validarServico, validarTomadorExterior, validarValores, type ComercioExteriorRascunho, type ComplementoRascunho, type DadosRascunho, type Erros, type IbsCbsRascunho, type IntermediarioRascunho, type ServicoRascunho, type SubstituicaoRascunho, type TomadorRascunho, type ValoresRascunho } from "@/lib/contribuinte/dps";
 import { modoEmissao, servicosProntos, tomadorPorId, tomadoresSalvos, type TomadorSalvo } from "@/lib/contribuinte/emissao";
 import { discoverMunicipalServiceCodes, type MunicipalServiceOption } from "@/lib/nfse/municipal-parameters/discovery";
-import { nbsForLc116, searchNbsCatalog, type NbsCandidate } from "@/lib/organizations/nbs-activity-resolver";
+import { allNbsCatalog, nbsForLc116, searchNbsCatalog, type NbsCandidate } from "@/lib/organizations/nbs-activity-resolver";
 import { ensureAutomaticService } from "@/lib/services/automatic-service";
 import { SafeFiscalError } from "@/lib/nfse/errors";
 import { carregarRascunho, excluirRascunho, gravarRascunho, registrarResultado } from "@/lib/contribuinte/rascunhos";
@@ -52,20 +52,27 @@ async function codigoDoCatalogo(id: string) {
  * Passo 2, ao escolher o "Código de Tributação Nacional": os códigos complementares do município (parâmetros do ADN, com a alíquota)
  * e as NBS que correspondem ao código. Se o escritório já configurou um serviço para esse código, vale o dele.
  */
-export async function opcoesDoCodigo(codigoNacionalId: string, competencia: string): Promise<OpcoesDoCodigo> {
+export async function opcoesDoCodigo(codigoNacionalId: string, competencia: string, outraNbs = false): Promise<OpcoesDoCodigo> {
   const contexto = await empresaQueEmite();
   if (!contexto) return { erro: SEM_PERMISSAO.mensagem };
   if ((await modoEmissao(contexto.empresa.id)).exigeRevisao) return { erro: "Esta empresa só emite com serviços revisados pelo escritório." };
   const catalogo = await codigoDoCatalogo(codigoNacionalId);
   if (!catalogo) return { erro: "Código de tributação nacional não encontrado." };
   const existente = (await servicosProntos(contexto.empresa.id)).find((item) => !item.automatico && item.codigoNacionalId === catalogo.id);
-  if (existente) return { existente: { id: existente.id, codigoMunicipal: existente.codigoMunicipal, nbs: existente.nbs } };
+  // `outraNbs`: quem emite quer outra NBS nesta nota; segue pelo caminho automático em vez do serviço do escritório.
+  if (existente && !outraNbs) return { existente: { id: existente.id, codigoMunicipal: existente.codigoMunicipal, nbs: existente.nbs } };
   try {
     const opcoes = await discoverMunicipalServiceCodes({ organizationId: contexto.empresa.id, municipalityCode: contexto.empresa.municipio, nationalTaxCode: catalogo.code, competence: /^\d{4}-\d{2}-\d{2}$/.test(competencia) ? competencia : hojeBrasilia() });
     return { opcoes, nbs: nbsForLc116(catalogo.item, catalogo.subitem) };
   } catch (error) {
     return { erro: error instanceof SafeFiscalError ? error.safeMessage : "Não foi possível consultar os parâmetros do município agora." };
   }
+}
+
+/** A tabela NBS inteira, para o seletor do passo Serviço (carrega uma vez quando o campo aparece). */
+export async function todasNbs(): Promise<NbsCandidate[]> {
+  await exigirEmpresa();
+  return allNbsCatalog();
 }
 
 /** Busca livre na tabela NBS (o Emissor Nacional deixa escolher qualquer item, não só os correlacionados). */

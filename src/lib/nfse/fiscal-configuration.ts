@@ -27,7 +27,8 @@ export const fiscalTechnicalConfigurationSchema=z.object({
   regEspTrib:z.enum(["0","1","2","3","4","5","6","9"]),
   issWithholdingType:z.enum(["1","2","3"]),
   issuerMunicipalRegistrationEmission:issuerMunicipalRegistrationEmissionSchema.optional(),
-});
+// ME/EPP do Simples sem o regime de apuração: a SEFIN recusa a nota (E0166).
+}).refine((value)=>value.opSimpNac!=="3"||Boolean(value.regApTribSN),{path:["regApTribSN"],message:"Informe o regime de apuração do Simples Nacional (obrigatório para ME/EPP)."});
 export type FiscalTechnicalConfiguration=z.infer<typeof fiscalTechnicalConfigurationSchema>;
 type StoredConfiguration={version:1;form:FiscalConfigurationForm;technical?:unknown};
 

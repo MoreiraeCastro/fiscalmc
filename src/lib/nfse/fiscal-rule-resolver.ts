@@ -18,6 +18,7 @@ export async function resolveFiscalConfiguration(input:FiscalResolutionInput):Pr
   let dpsConfiguration:z.infer<typeof dpsTaxConfigurationSchema>;
   try{const stored=storedDpsTaxConfigurationSchema.parse(input.dpsConfiguration);dpsConfiguration="version" in stored?(stored.technical??(() => {throw new Error("TECHNICAL_CONFIGURATION_PENDING");})()):stored;}
   catch{throw incomplete(MSG.perfil);}
+  if(dpsConfiguration.regime.simpleNational==="3"&&!dpsConfiguration.regime.simpleAssessment)throw new SafeFiscalError("FISCAL_CONFIGURATION_REVIEW",MSG.apuracaoSimples);
   const issuerMunicipalRegistrationEmission=dpsConfiguration.issuerMunicipalRegistrationEmission?.mode??"SEND";
   const parsedRateSource=issRateSourceSchema.safeParse(input.issRateSource);
   if(!input.issTaxation||!parsedRateSource.success)throw incomplete(MSG.tributacao);
@@ -90,6 +91,7 @@ export const MSG={
   codigoComplementar:"Falta o Código Complementar Municipal deste serviço. Volte ao passo Serviço e escolha o código complementar: a alíquota vem da Receita, como no Emissor Nacional.",
   semIncidencia:"O município não cobra ISS neste código complementar (sem incidência). Volte ao passo Serviço e escolha outro código complementar.",
   referencia:"Este serviço foi configurado a partir de uma nota anterior que não bate mais com ele. Peça ao escritório para revisar o serviço.",
+  apuracaoSimples:"Falta o regime de apuração do Simples Nacional na configuração fiscal da empresa (obrigatório para ME/EPP; sem ele a Receita recusa com E0166). O escritório completa em Empresa → Dados fiscais.",
 } as const;
 
 function incomplete(message:string){return new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE",message);}

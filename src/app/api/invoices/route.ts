@@ -137,6 +137,8 @@ export async function POST(request:Request){
     if(!service)throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","O serviço escolhido não está pronto para emissão. Volte ao passo Serviço e escolha o código de novo.");
     if(!profile)throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","A configuração fiscal da empresa ainda não existe. O escritório cadastra em Empresa → Configuração fiscal.");
     // Tomador no exterior: a SEFIN exige o grupo de comércio exterior (E0330).
+    // Com IBS/CBS a SEFIN exige o tomador com CPF/CNPJ e endereço no Brasil (E0239): avisa antes de enviar.
+    if(effective.ibsCbs&&customer?.person_type!=="FOREIGN"&&(!customer||!customer.tax_id||!customer.postal_code||!customer.municipality_code))throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE",!customer?"Nota com IBS/CBS precisa de tomador: a Receita exige CPF ou CNPJ e endereço. Informe o tomador no passo Pessoas.":"Nota com IBS/CBS: a Receita exige o endereço do tomador (CEP e município). Complete o cadastro do tomador no passo Pessoas.");
     if(customer?.person_type==="FOREIGN"&&!effective.extras?.foreignTrade)throw new SafeFiscalError("FISCAL_CONFIGURATION_INCOMPLETE","Tomador no exterior: informe os dados de comércio exterior no passo Serviço.");
     stage="READINESS";
     // "Subiu o A1, está pronto": perfil automático e serviço automático do ADN valem, a não ser que a empresa exija revisão do escritório.

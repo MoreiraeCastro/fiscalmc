@@ -35,8 +35,9 @@ const INTERNAL: Record<string, ProblemGuide> = {
 const SEFIN: Record<string, ProblemGuide> = {
   E0330: { titulo: "Tomador no exterior sem comércio exterior", oQueFazer: "Preencha o grupo de comércio exterior no passo Serviço (ou confira se o tomador é mesmo do exterior).", onde: "nota" },
   E0242: { titulo: "Tomador no exterior sem endereço completo", oQueFazer: "Complete o endereço no exterior do tomador.", onde: "nota" },
-  E0239: { titulo: "Indicador de operação não aceito para exterior", oQueFazer: "No IBS/CBS, troque o indicador de operação (o 100301 não vale para tomador no exterior).", onde: "nota" },
   E0424: { titulo: "Valor recebido não pode ser informado", oQueFazer: "Quando o prestador emite, o valor recebido pelo intermediário fica em branco.", onde: "nota" },
+  E0166: { titulo: "Falta o regime de apuração do Simples", oQueFazer: "Na configuração fiscal da empresa, informe o regime de apuração do Simples Nacional (ME/EPP) e emita de novo.", onde: "configuracao" },
+  E0239: { titulo: "IBS/CBS exige tomador com endereço", oQueFazer: "Informe o tomador com CPF/CNPJ e endereço no Brasil (CEP e município) ou emita sem IBS/CBS. Tomador no exterior: troque o indicador de operação (o 100301 não vale).", onde: "nota" },
   E1235: { titulo: "Leiaute da nota mudou na Receita", oQueFazer: "A Receita mudou o formato da DPS. Avise o programador.", onde: "programador" },
 };
 

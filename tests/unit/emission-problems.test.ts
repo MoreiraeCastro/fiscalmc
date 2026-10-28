@@ -28,3 +28,13 @@ describe("redirecionamento dos route handlers", () => {
     expect(appRedirectLocation("https://evil.com")).toBe("/emissor/contribuinte");
   });
 });
+
+describe("travas antes do envio", () => {
+  it("Simples ME/EPP sem regime de apuração não passa na configuração técnica (E0166)", async () => {
+    const { fiscalTechnicalConfigurationSchema } = await import("@/lib/nfse/fiscal-configuration");
+    const base = { opSimpNac: "3", regEspTrib: "0", issWithholdingType: "1" } as const;
+    expect(fiscalTechnicalConfigurationSchema.safeParse({ ...base, regApTribSN: null }).success).toBe(false);
+    expect(fiscalTechnicalConfigurationSchema.safeParse({ ...base, regApTribSN: "1" }).success).toBe(true);
+    expect(fiscalTechnicalConfigurationSchema.safeParse({ ...base, opSimpNac: "1", regApTribSN: null }).success).toBe(true);
+  });
+});

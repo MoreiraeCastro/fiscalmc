@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { BASE_PATH } from "@/lib/base-path";
+import { appRedirectLocation } from "@/lib/base-path";
 import { COOKIE_EMPRESA, contextoContribuinte } from "@/lib/contribuinte/contexto";
 
 /**
@@ -12,8 +12,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const voltar = url.searchParams.get("voltar") ?? "/contribuinte";
   const destino = voltar.startsWith("/contribuinte") && !voltar.startsWith("//") ? voltar : "/contribuinte";
   const { empresas } = await contextoContribuinte();
-  if (!empresas.some((item) => item.id === id)) return NextResponse.redirect(new URL(`${BASE_PATH}/contribuinte/empresa`, url.origin));
-  const resposta = NextResponse.redirect(new URL(`${BASE_PATH}${destino}`, url.origin));
+  if (!empresas.some((item) => item.id === id)) return new NextResponse(null, { status: 307, headers: { Location: appRedirectLocation("/contribuinte/empresa") } });
+  const resposta = new NextResponse(null, { status: 307, headers: { Location: appRedirectLocation(destino) } });
   resposta.cookies.set(COOKIE_EMPRESA, id, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 180 });
   return resposta;
 }

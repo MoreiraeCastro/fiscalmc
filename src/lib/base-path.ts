@@ -16,3 +16,13 @@ export const BASE_PATH = "/emissor";
 export function apiUrl(path: string): string {
   return `${BASE_PATH}${path}`;
 }
+
+/**
+ * Redirecionamento de route handler para um caminho do app. Usa Location relativo: atrás do nginx o
+ * `request.url` é o endereço interno (localhost:3002), e montar a URL com ele mandava o navegador para lá.
+ * Só aceita caminho interno ("/..."), nunca outro site.
+ */
+export function appRedirectLocation(path: string): string {
+  const safe = path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\") ? path : "/contribuinte";
+  return `${BASE_PATH}${safe}`;
+}

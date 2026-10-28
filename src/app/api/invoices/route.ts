@@ -78,12 +78,23 @@ function responseForStored(invoice:{id:string;status:string;access_key?:string|n
   return NextResponse.json({invoiceId:invoice.id,status:publicStatus,accessKey:invoice.access_key,nfseNumber:invoice.nfse_number,safeMessage:invoice.status==="UNKNOWN"||invoice.status==="SUBMITTING"?UNKNOWN_CLIENT_MESSAGE:invoice.safe_status_message},{status,headers:{"X-Idempotent-Replay":"true","X-Request-ID":requestId}});
 }
 
+/**
+ * Emissão barrada antes de virar nota (cadastro, serviço, certificado, erro interno): sem isso ela só existia na tela
+ * de quem tentou. Fica no histórico para o painel "Não emitidas" do escritório. Melhor esforço: nunca muda a resposta.
+ */
+async function recordBlockedEmission(context:{organizationId:string;actorUserId:string|null;actorType:string;customerId?:string|undefined;serviceTemplateId?:string|undefined;amountCents?:number|null},requestId:string,stage:IssuanceStage,code:string,message:string){
+  try{
+    await createAdminClient().from("audit_logs").insert({organization_id:context.organizationId,actor_user_id:context.actorUserId,actor_type:context.actorType,action:"invoice_blocked",entity:"invoice_request",entity_id:null,request_id:/^[0-9a-f-]{36}$/i.test(requestId)?requestId:null,safe_metadata:{code,message:message.slice(0,300),stage,customerId:context.customerId??null,serviceTemplateId:context.serviceTemplateId??null,amountCents:context.amountCents??null}});
+  }catch{}
+}
+
 export async function POST(request:Request){
   const requestId=request.headers.get("x-request-id")??crypto.randomUUID();
   let stage: IssuanceStage="AUTH";
   const parsedKey=idempotencySchema.safeParse(request.headers.get("idempotency-key"));
   if(!parsedKey.success)return NextResponse.json({error:"Chave de idempotência ausente ou inválida."},{status:400});
   const idempotencyKey=parsedKey.data;
+  let blockedContext:Parameters<typeof recordBlockedEmission>[0]|null=null;
   try{
     assertRateLimit(`issue:${request.headers.get("x-forwarded-for")??"local"}`);
     const requested=schema.parse(await request.json());
@@ -98,6 +109,7 @@ export async function POST(request:Request){
 
     stage="AUTH";
     const session=await requireIssuanceContext(requested.organizationId);
+    blockedContext={organizationId:session.organizationId,actorUserId:session.actorUserId??null,actorType:session.actorType,customerId:requested.customerId,serviceTemplateId:requested.serviceTemplateId,amountCents:(()=>{try{return Number(parseMoneyToCents(requested.amount))}catch{return null}})()};
     const authenticatedClient=await createClient();
     if(!authenticatedClient)throw new SafeFiscalError("AUTH_CONFIGURATION_REQUIRED","A sessão de emissão não está disponível.");
     const admin=createAdminClient();
@@ -193,8 +205,12 @@ export async function POST(request:Request){
   }catch(error){
     if(error instanceof z.ZodError)return NextResponse.json({error:"Revise os dados informados.",fields:error.flatten().fieldErrors},{status:400,headers:{"X-Request-ID":requestId}});
     if(error instanceof Error&&error.message==="RATE_LIMITED")return NextResponse.json({error:"Muitas tentativas. Aguarde um minuto e tente novamente."},{status:429,headers:{"X-Request-ID":requestId}});
-    if(error instanceof SafeFiscalError)return NextResponse.json({error:error.safeMessage,code:error.code},{status:422,headers:{"X-Request-ID":requestId}});
+    if(error instanceof SafeFiscalError){
+      if(blockedContext)await recordBlockedEmission(blockedContext,requestId,stage,error.code,error.safeMessage);
+      return NextResponse.json({error:error.safeMessage,code:error.code},{status:422,headers:{"X-Request-ID":requestId}});
+    }
     logEvent("error","INVOICE_REQUEST_FAILED",{requestId,...issuanceFailureDiagnostic(stage,error)});
+    if(blockedContext)await recordBlockedEmission(blockedContext,requestId,stage,"SERVER_ERROR",`Erro interno na etapa ${stage}. Código de atendimento: ${requestId}.`);
     return NextResponse.json({error:"Não foi possível concluir a emissão. Informe o código de atendimento ao escritório.",requestId},{status:500,headers:{"X-Request-ID":requestId}});
   }
 }

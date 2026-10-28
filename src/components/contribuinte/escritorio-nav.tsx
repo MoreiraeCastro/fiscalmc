@@ -7,6 +7,7 @@ const itens = [
   ["/admin", "Visão geral"],
   ["/admin/empresas", "Empresas"],
   ["/admin/notas", "Notas de todas as empresas"],
+  ["/admin/nao-emitidas", "Não emitidas"],
   ["/admin/pendencias", "Pendências"],
   ["/admin/servicos", "Serviços"],
   ["/admin/tomadores", "Tomadores"],

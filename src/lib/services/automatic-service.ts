@@ -88,7 +88,7 @@ export async function ensureAutomaticService(input: {
     const mudou = !automatico || automatico.municipal_service_code !== input.municipalServiceCode || automatico.nbs_code !== input.nbsCode || !automatico.active;
     if (mudou) {
       const { error } = await db.from("service_templates").update({ ...fiscal, workflow_status: "AUTO_READY", active: true, reviewed_at: null, reviewed_by: null, auto_ready_at: agora, auto_ready_source: ADN_AUTO_SOURCE }).eq("id", parado.id).eq("organization_id", organizationId);
-      if (error) { logFalha("update", error); return { ok: false, erro: "Não foi possível preparar o serviço para emissão." }; }
+      if (error) { logFalha("update", error); await auditarFalha(db, input, "update", error); return { ok: false, erro: "Não foi possível preparar o serviço para emissão." }; }
       await auditar(db, input, parado.id);
     }
     return { ok: true, serviceId: parado.id, created: false };
@@ -99,9 +99,17 @@ export async function ensureAutomaticService(input: {
   let inserido = await db.from("service_templates").insert({ ...novo, name: nome }).select("id").single();
   // (organization_id, name) é único: se outro serviço já usa a descrição, o nome leva o código na frente.
   if (inserido.error?.code === "23505") inserido = await db.from("service_templates").insert({ ...novo, name: `${input.municipalServiceCode} ${catalogo.description}`.slice(0, 160) }).select("id").single();
-  if (inserido.error || !inserido.data) { logFalha("insert", inserido.error); return { ok: false, erro: "Não foi possível preparar o serviço para emissão." }; }
+  if (inserido.error || !inserido.data) { logFalha("insert", inserido.error); await auditarFalha(db, input, "insert", inserido.error); return { ok: false, erro: "Não foi possível preparar o serviço para emissão." }; }
   await auditar(db, input, inserido.data.id);
   return { ok: true, serviceId: inserido.data.id, created: true };
+}
+
+/** A falha também vai para o painel "Não emitidas" do escritório (a emissão parou aqui, antes de virar nota). */
+async function auditarFalha(db: SupabaseClient, input: { organizationId: string; createdBy: string; actorType: "OFFICE" | "CLIENT"; municipalServiceCode: string }, operacao: "update" | "insert", error: { code?: string; message?: string } | null) {
+  await db.from("audit_logs").insert({
+    organization_id: input.organizationId, actor_user_id: input.createdBy, actor_type: input.actorType, action: "invoice_blocked", entity: "service_template",
+    safe_metadata: { code: "SERVICE_PREPARE_FAILED", message: `Não foi possível preparar o serviço ${input.municipalServiceCode} (${operacao}: ${error?.code ?? "sem código"}).`, stage: "SERVICE_PREPARE" },
+  }).then(() => undefined, () => undefined);
 }
 
 /** Motivo da recusa do banco (código e mensagem do Postgres, sem dados da empresa) para o log do serviço. */

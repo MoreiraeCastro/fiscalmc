@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { PageHeader, StatusBadge, formatDateTime } from "@/components/ui-kit";
 import { requireOfficeDataClient } from "@/lib/auth/session";
 import { getCertificateOperationalState } from "@/lib/operations/queue";
+import { loadEmissionProblems } from "@/lib/operations/emission-problems-data";
 import { presentAuditActor, presentAuditEvent } from "@/lib/operations/audit-presentation";
 import { relationOne } from "@/lib/presentation/relations";
 
@@ -21,18 +22,20 @@ function readiness(company: Company, certificate: Certificate | undefined) {
 export default async function AdminPage() {
   const db = await requireOfficeDataClient().catch(() => null);
   if (!db) redirect("/app?notice=office");
-  const [companiesResult, certificatesResult, unknownResult, servicesResult, cancellationsResult, auditsResult] = await Promise.all([
+  const [companiesResult, certificatesResult, unknownResult, servicesResult, cancellationsResult, auditsResult, problems] = await Promise.all([
     db.from("organizations").select("id,legal_name,status,emission_blocked,created_at").order("created_at", { ascending: false }),
     db.from("digital_certificates").select("organization_id,status,valid_until").is("replaced_at", null),
     db.from("invoices").select("id", { count: "exact", head: true }).eq("status", "UNKNOWN"),
     db.from("service_templates").select("id", { count: "exact", head: true }).in("workflow_status", ["PENDING_REVIEW", "NEEDS_INFO"]),
     db.from("cancellation_requests").select("id", { count: "exact", head: true }).in("status", ["REQUESTED", "UNDER_REVIEW", "APPROVED", "PROCESSING", "UNKNOWN"]),
     db.from("audit_logs").select("id,action,actor_type,created_at,organizations(legal_name)").order("created_at", { ascending: false }).limit(6),
+    loadEmissionProblems(db, { since: new Date(Date.now() - 30 * 864e5).toISOString() }),
   ]);
+  const notEmitted = problems.filter((problem) => problem.state === "pendente" && problem.origin !== "CONFIRMACAO").length;
   const companies = (companiesResult.data ?? []) as Company[];
   const certificates = new Map(((certificatesResult.data ?? []) as Certificate[]).map((certificate) => [certificate.organization_id, certificate]));
   const certificateAttention = ((certificatesResult.data ?? []) as Certificate[]).filter((certificate) => getCertificateOperationalState({ status: certificate.status, validUntil: certificate.valid_until }));
-  const attentionCount = Number(unknownResult.count ?? 0) + Number(servicesResult.count ?? 0) + Number(cancellationsResult.count ?? 0) + certificateAttention.length + companies.filter((company) => company.emission_blocked || company.status !== "ACTIVE").length;
+  const attentionCount = notEmitted + Number(unknownResult.count ?? 0) + Number(servicesResult.count ?? 0) + Number(cancellationsResult.count ?? 0) + certificateAttention.length + companies.filter((company) => company.emission_blocked || company.status !== "ACTIVE").length;
   const audits = (auditsResult.data ?? []) as AuditRow[];
 
   return <div className="page v2-page office-dashboard">
@@ -41,6 +44,7 @@ export default async function AdminPage() {
     <section className="office-section office-attention" aria-labelledby="attention-heading">
       <div className="office-section-heading"><div><span className="office-eyebrow">Operação</span><h2 id="attention-heading">O que precisa de atenção</h2><p>Somente situações que pedem uma ação do escritório.</p></div><Link className="v2-text-action" href="/admin/pendencias">Ver pendências</Link></div>
       {attentionCount ? <div className="office-action-list">
+        {notEmitted ? <OfficeAction href="/admin/nao-emitidas" title={`${notEmitted} nota(s) não emitida(s)`} description="Veja o motivo de cada uma e onde corrigir." /> : null}
         {unknownResult.count ? <OfficeAction href="/admin/notas?status=UNKNOWN" title={`${unknownResult.count} NFS-e aguardando confirmação`} description="Verifique a situação antes de qualquer nova emissão." /> : null}
         {servicesResult.count ? <OfficeAction href="/admin/servicos?status=PENDING_REVIEW" title={`${servicesResult.count} serviço(s) precisam de revisão`} description="Não foi possível concluir a configuração automaticamente." /> : null}
         {certificateAttention.length ? <OfficeAction href="/admin/certificados" title={`${certificateAttention.length} certificado(s) exigem atenção`} description="Confira vencimentos e a validade do certificado A1." /> : null}

@@ -937,3 +937,21 @@ textarea.input { min-height:92px; }
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { scroll-behavior:auto!important; transition-duration:.01ms!important; animation-duration:.01ms!important; animation-iteration-count:1!important; }
 }
+
+/* Escritório: painel "Não emitidas" */
+.ne-filter { grid-template-columns:minmax(240px,1fr) 190px auto; }
+.ne-causes { padding:14px 18px; }
+.ne-causes h2 { margin:0 0 8px; font-size:13px; color:var(--muted); font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.ne-causes ul { margin:0; padding:0; list-style:none; display:flex; flex-wrap:wrap; gap:8px; }
+.ne-causes li { display:inline-flex; gap:7px; align-items:center; padding:6px 11px; border:1px solid var(--border); border-radius:999px; background:#fff; font-size:12.5px; color:var(--navy); }
+.ne-causes li strong { color:var(--orange-dark); }
+.ne-table td { vertical-align:top; }
+.ne-when { display:block; margin-bottom:6px; white-space:nowrap; font-size:12.5px; color:var(--muted); }
+.ne-sub { display:block; margin-top:3px; color:var(--muted); font-size:12px; line-height:1.4; max-width:420px; }
+.ne-title { display:block; color:var(--navy); font-size:13px; }
+.ne-code { display:inline-block; margin-top:5px; padding:1px 6px; border-radius:4px; background:#f1f3f7; color:var(--muted); font-size:11px; }
+.ne-todo { max-width:300px; font-size:12.5px; line-height:1.45; color:var(--text, #1d2433); }
+.ne-actions { flex-wrap:wrap; justify-content:flex-end; }
+.ne-done td { opacity:.55; }
+.ne-ok { display:inline-flex; align-items:center; gap:6px; color:#1b7a51; font-weight:650; }
+@media (max-width: 860px) { .ne-filter { grid-template-columns:1fr; } }

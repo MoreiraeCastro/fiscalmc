@@ -12,6 +12,13 @@ export function SituacaoNota({ status }: { status: string }) {
   return <span className={`pc-situacao ${situacao.tom}`}><i aria-hidden />{situacao.rotulo}</span>;
 }
 
+/** Nota emitida fora do nosso emissor: abre pela tela de leitura do XML do ADN. */
+const externa = { visualizar: (id: string) => `/contribuinte/notas/emitidas/externa/${id}`, documento: (id: string, tipo: "xml" | "pdf") => apiUrl(`/api/contribuinte/recebidas/${id}/${tipo}`) };
+
+function SeloExterna() {
+  return <em className="pc-selo neutro" title="Emitida fora deste emissor (Emissor Nacional ou outro sistema)">externa</em>;
+}
+
 /** Tabela "NFS-e Emitidas": Geração · Emitida para · Competência · Município Emissor · Preço Serviço · Situação · ⋮ */
 export function TabelaNotas({ linhas, municipio, escritorio }: { linhas: NotaLinha[]; municipio: string; escritorio: boolean }) {
   const rotas = rotasLegadas(escritorio);
@@ -21,13 +28,15 @@ export function TabelaNotas({ linhas, municipio, escritorio }: { linhas: NotaLin
       <tbody>{linhas.map((nota) => {
         const gerada = nota.status === "ISSUED" || nota.status === "CANCELLED";
         return <tr key={nota.id}>
-          <td className="nowrap">{formatarDataHora(nota.geracao)}{nota.teste ? <em className="pc-selo neutro" title="Ambiente de Produção Restrita, sem valor fiscal">teste</em> : null}</td>
+          <td className="nowrap">{formatarDataHora(nota.geracao)}{nota.teste ? <em className="pc-selo neutro" title="Ambiente de Produção Restrita, sem valor fiscal">teste</em> : null}{nota.externa ? <SeloExterna /> : null}</td>
           <td>{pessoa(nota.emitidaPara.documento, nota.emitidaPara.nome)}</td>
           <td>{formatarCompetencia(nota.competencia)}</td>
           <td>{municipio}</td>
           <td className="num">{formatarValor(nota.valorCentavos)}</td>
           <td><SituacaoNota status={nota.status} /></td>
-          <td className="acoes"><MenuNota visualizar={rotas.visualizar(nota.id)} xml={apiUrl(rotas.documento(nota.id, "NFSE_XML"))} danfse={apiUrl(rotas.documento(nota.id, "PDF"))} gerada={gerada} emitida={nota.status === "ISSUED"} notaId={nota.id} /></td>
+          <td className="acoes">{nota.externa
+            ? <MenuNota visualizar={externa.visualizar(nota.id)} xml={externa.documento(nota.id, "xml")} danfse={externa.documento(nota.id, "pdf")} gerada emitida={false} />
+            : <MenuNota visualizar={rotas.visualizar(nota.id)} xml={apiUrl(rotas.documento(nota.id, "NFSE_XML"))} danfse={apiUrl(rotas.documento(nota.id, "PDF"))} gerada={gerada} emitida={nota.status === "ISSUED"} notaId={nota.id} />}</td>
         </tr>;
       })}</tbody>
     </table>
@@ -41,12 +50,12 @@ export function TabelaUltimas({ linhas, escritorio }: { linhas: NotaLinha[]; esc
     <table className="pc-tabela">
       <thead><tr><th>Geração</th><th>Emitida para</th><th className="num">Valor (R$)</th><th><span className="sr-only">Visualizar</span></th></tr></thead>
       <tbody>{linhas.map((nota) => <tr key={nota.id}>
-        <td className="nowrap">{formatarDataHora(nota.geracao)}</td>
+        <td className="nowrap">{formatarDataHora(nota.geracao)}{nota.externa ? <SeloExterna /> : null}</td>
         <td>{pessoa(nota.emitidaPara.documento, nota.emitidaPara.nome)}</td>
         <td className="num">{formatarValor(nota.valorCentavos)}</td>
         <td className="acoes">
-          {nota.status === "ISSUED" ? <form action={emitirDeNovoAction} className="pc-inline"><input type="hidden" name="notaId" value={nota.id} /><button type="submit" className="pc-icone-acao" title="Emitir de novo" aria-label="Emitir de novo"><CopyPlus size={17} aria-hidden /></button></form> : null}
-          <Link className="pc-icone-acao" href={rotas.visualizar(nota.id)} title="Visualizar" aria-label="Visualizar"><Eye size={17} aria-hidden /></Link>
+          {nota.status === "ISSUED" && !nota.externa ? <form action={emitirDeNovoAction} className="pc-inline"><input type="hidden" name="notaId" value={nota.id} /><button type="submit" className="pc-icone-acao" title="Emitir de novo" aria-label="Emitir de novo"><CopyPlus size={17} aria-hidden /></button></form> : null}
+          <Link className="pc-icone-acao" href={nota.externa ? externa.visualizar(nota.id) : rotas.visualizar(nota.id)} title="Visualizar" aria-label="Visualizar"><Eye size={17} aria-hidden /></Link>
         </td>
       </tr>)}</tbody>
     </table>

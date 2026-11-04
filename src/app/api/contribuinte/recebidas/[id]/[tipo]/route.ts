@@ -17,7 +17,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   if (!UUID.test(id) || (tipo !== "xml" && tipo !== "pdf")) return NextResponse.json({ error: "Documento não encontrado." }, { status: 404 });
   const nota = await recebidaPorId(empresa.id, id);
   if (!nota) return NextResponse.json({ error: "Documento não encontrado." }, { status: 404 });
-  const nome = `nfse-recebida-${nota.nfse_number ?? nota.access_key}`;
+  const nome = `${nota.role === "PRESTADOR" ? "nfse" : "nfse-recebida"}-${nota.nfse_number ?? nota.access_key}`;
   await createAdminClient().from("audit_logs").insert({ organization_id: empresa.id, actor_user_id: usuarioId, actor_type: escritorio ? "OFFICE" : "CLIENT", action: "received_document_downloaded", entity: "received_document", entity_id: nota.id, safe_metadata: { tipo } });
   if (tipo === "xml") {
     return new NextResponse(nota.xml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Content-Disposition": `attachment; filename="${nome}.xml"`, "Cache-Control": "private, no-store" } });

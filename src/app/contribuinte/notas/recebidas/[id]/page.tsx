@@ -45,17 +45,21 @@ export default async function VisualizarRecebida({ params }: { params: Promise<{
   const nota = await recebidaPorId(empresa.id, id);
   if (!nota) notFound();
   const oficial = lerNfseOficial(nota.xml);
+  // A mesma tela abre a nota que a empresa emitiu fora do nosso emissor (vem do ADN igual às recebidas).
+  const emitida = nota.role === "PRESTADOR";
+  const lista = emitida ? { nome: "NFS-e Emitidas", href: "/contribuinte/notas/emitidas" } : { nome: "NFS-e Recebidas", href: "/contribuinte/notas/recebidas" };
 
   return <>
-    <Trilha itens={[["NFS-e Recebidas", "/contribuinte/notas/recebidas"], nota.nfse_number ? `Nº ${nota.nfse_number}` : "Visualizar"]} />
+    <Trilha itens={[[lista.nome, lista.href], nota.nfse_number ? `Nº ${nota.nfse_number}` : "Visualizar"]} />
     <div className="pc-barra-acoes pc-nao-imprime">
-      <Link className="pc-botao secundario" href="/contribuinte/notas/recebidas"><ArrowLeft size={16} aria-hidden />Voltar</Link>
+      <Link className="pc-botao secundario" href={lista.href}><ArrowLeft size={16} aria-hidden />Voltar</Link>
       <a className="pc-botao secundario" href={apiUrl(`/api/contribuinte/recebidas/${nota.id}/xml`)} title="Download XML"><FileCode2 size={16} aria-hidden />XML</a>
       <a className="pc-botao secundario" href={apiUrl(`/api/contribuinte/recebidas/${nota.id}/pdf`)} title="Download DANFS-e"><Download size={16} aria-hidden />PDF</a>
       <BotaoImprimir />
     </div>
 
-    {nota.cancelled_at ? <Aviso tipo="erro"><strong>Esta NFS-e foi cancelada pelo prestador</strong> em {formatarDataHora(nota.cancelled_at)}.</Aviso> : null}
+    {nota.cancelled_at ? <Aviso tipo="erro"><strong>NFS-e cancelada{emitida ? "" : " pelo prestador"}</strong> em {formatarDataHora(nota.cancelled_at)}.</Aviso> : null}
+    {emitida ? <Aviso>Emitida fora deste emissor. Cancelar ou substituir, só onde foi emitida.</Aviso> : null}
     {nota.role === "INTERMEDIARIO" ? <Aviso>Empresa <strong>intermediária</strong> nesta nota.</Aviso> : null}
     {!oficial ? <Aviso tipo="alerta">XML ilegível. Baixe o XML ou o PDF para conferir.</Aviso> : null}
 

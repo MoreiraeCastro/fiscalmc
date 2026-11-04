@@ -323,3 +323,9 @@ button.pc-icone-acao { border: 0; background: none; cursor: pointer; }
 
 /* Botão com cara de link (ex.: "Procurar em toda a tabela NBS") */
 button.pc-link { justify-self: start; margin-top: 8px; padding: 0; border: 0; background: none; cursor: pointer; text-align: left; }
+
+/* XML para DANFS-e */
+.pc-soltar { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 14px; padding: 28px 16px; border: 2px dashed var(--border); border-radius: 10px; background: var(--surface); color: var(--navy); text-align: center; }
+.pc-soltar.ativo { border-color: var(--navy); background: #eaf4fd; }
+.pc-soltar p { margin: 0; font-size: 14px; }
+.pc-erro-texto { color: #8a1f1f; font-size: 13px; }

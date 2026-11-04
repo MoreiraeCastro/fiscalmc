@@ -269,7 +269,7 @@ export async function gerarRelacao(input: { empresaId: string; razaoSocial: stri
   }));
   relacao.getRow(1).font = { bold: true };
   for (const linha of linhas) relacao.addRow(colunas.map((titulo) => linha.valores[titulo] ?? null));
-  relacao.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: colunas.length } };
+  relacao.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, linhas.length + 1), column: colunas.length } };
 
   const resumo = livro.addWorksheet("Resumo");
   resumo.columns = [{ header: "Situação", key: "s", width: 16 }, { header: "Qtd", key: "q", width: 8 }, { header: "Valor (R$)", key: "v", width: 18, style: { numFmt: "#,##0.00" } }];

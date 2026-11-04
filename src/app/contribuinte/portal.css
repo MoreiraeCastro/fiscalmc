@@ -337,6 +337,25 @@ button.pc-link { justify-self: start; margin-top: 8px; padding: 0; border: 0; ba
 .pc-relacao legend { margin-bottom: 6px; font-size: 12.5px; font-weight: 650; color: var(--navy); }
 .pc-relacao fieldset label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
 .pc-relacao-mes { display: grid; gap: 6px; font-size: 12.5px; font-weight: 650; color: var(--navy); }
-.pc-relacao-mes input { min-height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: 14px; }
 .pc-relacao-botoes { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .pc-relacao + .pc-meta { margin: 14px 0 0; }
+
+/* Seletor de competência */
+.pc-competencia { position: relative; display: inline-flex; align-items: stretch; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.pc-competencia-seta { display: grid; place-items: center; width: 34px; border: 0; background: none; color: var(--navy); cursor: pointer; }
+.pc-competencia-seta:hover:not(:disabled) { background: var(--surface); }
+.pc-competencia-seta:disabled { color: var(--border); cursor: default; }
+.pc-competencia-seta:first-of-type { border-right: 1px solid var(--border); border-radius: 7px 0 0 7px; }
+.pc-competencia-seta:last-of-type { border-left: 1px solid var(--border); border-radius: 0 7px 7px 0; }
+.pc-competencia-nome { min-width: 150px; padding: 0 14px; border: 0; background: none; color: var(--navy); font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; }
+.pc-competencia-nome:hover, .pc-competencia-nome[aria-expanded="true"] { background: var(--surface); }
+.pc-competencia-grade { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: 236px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff; box-shadow: 0 8px 24px rgba(15, 46, 69, .14); }
+.pc-competencia-ano { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: var(--navy); font-size: 14px; }
+.pc-competencia-ano button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: none; color: var(--navy); cursor: pointer; }
+.pc-competencia-ano button:hover:not(:disabled) { background: var(--surface); }
+.pc-competencia-ano button:disabled { color: var(--border); cursor: default; }
+.pc-competencia-meses { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.pc-competencia-meses button { height: 32px; border: 0; border-radius: 6px; background: none; color: var(--navy); font: inherit; font-size: 13px; text-transform: capitalize; cursor: pointer; }
+.pc-competencia-meses button:hover:not(:disabled) { background: var(--surface); }
+.pc-competencia-meses button.ativo { background: var(--navy); color: #fff; font-weight: 650; }
+.pc-competencia-meses button:disabled { color: var(--border); cursor: default; }

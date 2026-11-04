@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Pencil, Plus, Search, X } from "lucide-react";
+import { Pencil, Plus, Search, X } from "@/components/icons";
 import { apiUrl } from "@/lib/base-path";
 
 type Customer = {

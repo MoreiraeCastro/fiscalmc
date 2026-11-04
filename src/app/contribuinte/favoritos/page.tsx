@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Pencil, Plus, Play } from "lucide-react";
+import { Pencil, Plus, Play } from "@/components/icons";
 import { Aviso, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { ExcluirRascunho } from "@/components/contribuinte/excluir-rascunho";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
@@ -27,7 +27,6 @@ export default async function FavoritosPage({ searchParams }: { searchParams: Pr
         : <Link className="pc-botao" href="/contribuinte/favoritos/novo"><Plus size={17} aria-hidden />Novo Serviço Favorito</Link>}</div> : null}
     </div>
     {salvo ? <Aviso tipo="sucesso">Serviço favorito salvo.</Aviso> : null}
-    <Aviso>Cadastre até {FAVORITOS_MAX} serviços com informações pré-preenchidas. Ao usar um favorito, a emissão já abre com o serviço, a descrição e, se houver, o tomador, o valor e o IBS/CBS.</Aviso>
     <Cartao>
       {favoritos.length ? <div className="pc-tabela-rolagem"><table className="pc-tabela">
         <thead><tr><th>Nome</th><th>Serviço</th><th>Tomador</th><th className="num">Valor (R$)</th><th><span className="sr-only">Ações</span></th></tr></thead>

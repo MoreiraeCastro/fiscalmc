@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, FileOutput, FilePen, FilePlus2, FileText, Home, Inbox, Settings, Star } from "lucide-react";
+import { Building2, FileOutput, FilePen, FilePlus2, FileText, Home, Inbox, Settings, Star } from "@/components/icons";
 
 const itens = [
   { href: "/contribuinte", rotulo: "Página Principal", Icone: Home, ativo: (p: string) => p === "/contribuinte" },

@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Trash2 } from "@/components/icons";
 
 /** Botão de excluir com confirmação (rascunhos e favoritos). */
 export function ExcluirRascunho({ id, action, pergunta = "Excluir este rascunho? Isso não pode ser desfeito.", titulo = "Excluir rascunho" }: { id: string; action: (formData: FormData) => Promise<void>; pergunta?: string; titulo?: string }) {

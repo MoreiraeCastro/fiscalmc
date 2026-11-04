@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Download, FileUp } from "lucide-react";
+import { Download, FileUp } from "@/components/icons";
 import { apiUrl } from "@/lib/base-path";
 
 type Item = { nome: string; estado: "gerando" | "pronto" | "erro"; url?: string; erro?: string };

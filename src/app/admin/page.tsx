@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, Building2, CircleAlert, CircleCheck, FilePlus2, Plus, ScrollText } from "lucide-react";
+import { ArrowUpRight, Building2, CircleAlert, CircleCheck, FilePlus2, Plus, ScrollText } from "@/components/icons";
 import { redirect } from "next/navigation";
 import { PageHeader, StatusBadge, formatDateTime } from "@/components/ui-kit";
 import { requireOfficeDataClient } from "@/lib/auth/session";

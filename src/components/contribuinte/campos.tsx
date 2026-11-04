@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building, FileCheck2, Receipt, Users } from "lucide-react";
+import { Building, FileCheck2, Receipt, Users } from "@/components/icons";
 import { PASSOS, type NumeroPasso } from "@/lib/contribuinte/dps";
 
 const ICONES = { 1: Users, 2: Building, 3: Receipt, 4: FileCheck2 } as const;

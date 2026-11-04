@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef,useState } from "react";
-import { CheckCircle2,ShieldAlert,Upload,XCircle } from "lucide-react";
+import { CheckCircle2,ShieldAlert,Upload,XCircle } from "@/components/icons";
 import { getCertificateReadiness,type StoredCertificateStatus } from "@/lib/nfse/certificate/status";
 import { certificateHolderName } from "@/lib/nfse/certificate/presentation";
 import { apiUrl } from "@/lib/base-path";

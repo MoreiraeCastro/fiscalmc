@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Ban } from "lucide-react";
+import { Ban } from "@/components/icons";
 import { redirect } from "next/navigation";
 import { CancellationReviewActions } from "@/components/cancellation-review-actions";
 import { EmptyState, PageHeader, StatusBadge, formatCurrency, formatDateTime } from "@/components/ui-kit";

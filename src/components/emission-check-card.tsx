@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, CircleDashed, LoaderCircle, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, Check, CircleDashed, LoaderCircle, RefreshCw, X } from "@/components/icons";
 import { apiUrl } from "@/lib/base-path";
 import type { CheckStatus, CheckStepKey, EmissionCheck } from "@/lib/operations/emission-check";
 

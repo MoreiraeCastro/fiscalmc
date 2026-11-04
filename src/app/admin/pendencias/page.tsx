@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CircleAlert } from "lucide-react";
+import { ArrowRight, CircleAlert } from "@/components/icons";
 import { redirect } from "next/navigation";
 import { EmptyState, PageHeader, StatusBadge, formatDateTime } from "@/components/ui-kit";
 import { DismissPendencyButton } from "@/components/dismiss-pendency-button";

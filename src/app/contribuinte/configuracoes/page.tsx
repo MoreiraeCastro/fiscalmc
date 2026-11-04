@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Aviso, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
+import { Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { FormContato } from "@/components/contribuinte/form-contato";
 import { FormTotalTributos, type InicialTotalTributos } from "@/components/contribuinte/form-total-tributos";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
@@ -34,15 +34,15 @@ export default async function ConfiguracoesPage() {
     <Trilha itens={["Configurações"]} />
     <h1 className="pc-titulo">Configurações</h1>
     <Cartao titulo="Informações de contato">
-      <p className="pc-texto">E-mail e telefone da empresa, enviados na DPS como contato do prestador.</p>
+      <p className="pc-texto">Contato do prestador na DPS.</p>
       <FormContato inicial={{ email: empresa.email ?? "", telefone: empresa.telefone ?? "" }} podeEditar={empresa.podeEmitir} />
     </Cartao>
     <Cartao titulo="Valor aproximado dos tributos">
-      <p className="pc-texto">Pré-configure aqui e a emissão não pergunta mais. Opção no Simples Nacional: {emitente.opcaoSimples}.</p>
+      <p className="pc-texto">Opção no Simples Nacional: {emitente.opcaoSimples}.</p>
       <FormTotalTributos inicial={inicialTotal} simplesMeEpp={simplesMeEpp} podeEditar={empresa.podeEmitir} />
     </Cartao>
     <Cartao titulo="Serviços Favoritos">
-      <p className="pc-texto">Até 10 serviços com informações pré-preenchidas para emitir mais rápido. <Link className="pc-link" href="/contribuinte/favoritos">Abrir Serviços Favoritos</Link></p>
+      <p className="pc-texto"><Link className="pc-link" href="/contribuinte/favoritos">Abrir Serviços Favoritos</Link></p>
     </Cartao>
   </>;
 }

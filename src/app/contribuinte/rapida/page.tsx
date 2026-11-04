@@ -31,10 +31,10 @@ export default async function EmissaoRapidaPage({ searchParams }: { searchParams
       <h1 className="pc-titulo">Emissão rápida</h1>
       <div className="pc-acoes"><Link className="pc-link" href="/contribuinte/dps/novo/pessoas">Emissão completa (4 passos)</Link></div>
     </div>
-    {!empresa.podeEmitir ? <Aviso tipo="alerta">Seu usuário consulta esta empresa, mas não tem permissão para emitir por ela.</Aviso> : null}
-    {empresa.emissaoBloqueada ? <Aviso tipo="alerta">A emissão desta empresa está <strong>bloqueada</strong> até o escritório concluir o cadastro.</Aviso> : null}
-    {!modo.perfilAceito ? <Aviso tipo="alerta">{modo.exigeRevisao ? "Esta empresa só emite com a configuração fiscal revisada pelo escritório, e ela ainda não foi revisada."
-      : "A consulta de CNPJ não informou se esta empresa é do Simples Nacional. O escritório precisa informar o regime antes de emitir."}</Aviso> : null}
+    {!empresa.podeEmitir ? <Aviso tipo="alerta">Sem permissão para emitir por esta empresa.</Aviso> : null}
+    {empresa.emissaoBloqueada ? <Aviso tipo="alerta">Emissão bloqueada até o escritório concluir o cadastro.</Aviso> : null}
+    {!modo.perfilAceito ? <Aviso tipo="alerta">{modo.exigeRevisao ? "Configuração fiscal ainda não revisada pelo escritório."
+      : "Regime tributário não informado na consulta do CNPJ. O escritório precisa informar o regime."}</Aviso> : null}
   </>;
 
   // Revisão: o rascunho já passou pelas regras dos três passos; Emitir fica aqui mesmo.
@@ -70,7 +70,7 @@ export default async function EmissaoRapidaPage({ searchParams }: { searchParams
     federal: dados.valores?.federal ?? null,
   };
   return <>{cabecalho}
-    {!servicos.length && modo.exigeRevisao ? <Aviso tipo="alerta">Esta empresa ainda não tem serviço liberado pelo escritório.</Aviso> : null}
+    {!servicos.length && modo.exigeRevisao ? <Aviso tipo="alerta">Nenhum serviço liberado pelo escritório.</Aviso> : null}
     <FormRapida rascunhoId={rascunho?.id ?? null} hoje={hoje} regime={regimeFederal(emitente.simples, emitente.regimeTributario)} ibsCbsObrigatorioDesde={IBS_CBS_OBRIGATORIO_DESDE[getConfiguredNFSeEnvironment()]} tomadores={tomadores} inicial={inicial}
       servicos={servicos.map((item) => ({ id: item.id, nome: item.nome, codigo: item.codigo, descricaoCodigo: item.descricaoCodigo, descricaoPadrao: item.descricaoPadrao }))}
       nacional={modo.exigeRevisao ? null : { catalogo, usados: servicos.map((item) => ({ id: item.id, codigoNacionalId: item.codigoNacionalId, codigoMunicipal: item.codigoMunicipal, nbs: item.nbs, automatico: item.automatico })) }} />

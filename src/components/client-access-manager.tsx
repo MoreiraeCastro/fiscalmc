@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Copy, KeyRound, LockKeyhole, RotateCcw, ShieldCheck, UserRoundPlus } from "lucide-react";
+import { Copy, KeyRound, LockKeyhole, RotateCcw, ShieldCheck, UserRoundPlus } from "@/components/icons";
 import { apiUrl } from "@/lib/base-path";
 
 type Access = { cnpj: string; status: "ACTIVE" | "BLOCKED" | "INVALID"; createdAt: string; blockedAt: string | null };

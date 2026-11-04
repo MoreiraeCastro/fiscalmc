@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Download, FileCode2, FilePlus2, FileText } from "lucide-react";
+import { ArrowLeft, Download, FileCode2, FilePlus2, FileText } from "@/components/icons";
 import { Aviso, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { SituacaoNota } from "@/components/contribuinte/tabela-notas";
 import { BotaoImprimir, BotaoSubstituir, CancelarNfse, ConsultarCancelamento, SolicitarCancelamento } from "@/components/contribuinte/acoes-nota";
@@ -89,9 +89,9 @@ export default async function VisualizarNfse({ params, searchParams }: { params:
       {podeAgir && !escritorio && !pedidoAberto && !pedidoIncerto ? <SolicitarCancelamento notaId={nota.id} /> : null}
     </div>
 
-    {filtros.emitida && nota.status === "ISSUED" ? <Aviso tipo="sucesso"><strong>A NFS-e foi gerada com sucesso.</strong></Aviso> : null}
+    {filtros.emitida && nota.status === "ISSUED" ? <Aviso tipo="sucesso"><strong>NFS-e emitida.</strong></Aviso> : null}
     {filtros.erro === "substituicao" ? <Aviso tipo="erro">Não foi possível abrir a substituição desta nota.</Aviso> : null}
-    {nota.status === "UNKNOWN" || nota.status === "SUBMITTING" ? <Aviso tipo="alerta"><strong>Estamos confirmando a situação desta NFS-e com a Receita.</strong> Não emita de novo: a confirmação é automática.</Aviso> : null}
+    {nota.status === "UNKNOWN" || nota.status === "SUBMITTING" ? <Aviso tipo="alerta"><strong>Aguardando confirmação da Receita.</strong> Não emita de novo.</Aviso> : null}
     {nota.status === "REJECTED" ? <Aviso tipo="erro"><strong>A NFS-e não foi autorizada.</strong> {nota.safe_status_message ?? ""}</Aviso> : null}
     {substituida ? <Aviso tipo="erro"><strong>NFS-e cancelada por substituição.</strong> Substituta: <Link className="pc-link" href={`/contribuinte/nfse/${substituta!.id}`}>NFS-e nº {substituta!.nfse_number ?? "—"}</Link>.</Aviso>
       : nota.status === "CANCELLED" ? <Aviso tipo="erro"><strong>Esta NFS-e foi cancelada</strong>{nota.cancelled_at ? ` em ${formatarDataHora(nota.cancelled_at)}` : ""}.</Aviso> : null}
@@ -99,7 +99,7 @@ export default async function VisualizarNfse({ params, searchParams }: { params:
     {original ? <Aviso>Esta NFS-e substitui a <Link className="pc-link" href={`/contribuinte/nfse/${original.id}`}>NFS-e nº {original.nfse_number ?? "—"}</Link>.</Aviso> : null}
     {pedidoIncerto ? <Aviso tipo="alerta"><strong>Cancelamento enviado sem resposta da SEFIN.</strong> Confirme antes de tentar de novo.{escritorio ? <ConsultarCancelamento notaId={nota.id} /> : null}</Aviso> : null}
     {pedidoAberto ? <Aviso tipo="alerta"><strong>Cancelamento solicitado pelo cliente</strong> em {formatarDataHora(pedidoAberto.created_at)}: “{pedidoAberto.reason}”.{escritorio ? " Use Cancelar NFS-e para transmitir." : " O escritório vai conferir."}</Aviso> : null}
-    {nota.environment !== "PRODUCTION" ? <Aviso>Nota de <strong>Produção Restrita</strong> (teste, sem valor fiscal).</Aviso> : null}
+    {nota.environment !== "PRODUCTION" ? <Aviso><strong>Produção Restrita:</strong> nota de teste, sem valor fiscal.</Aviso> : null}
 
     <div className="pc-grade-2">
       <Cartao titulo="Identificação da NFS-e" acoes={<SituacaoNota status={nota.status} />}>
@@ -175,7 +175,7 @@ export default async function VisualizarNfse({ params, searchParams }: { params:
           <div><dt>Versão da aplicação</dt><dd>{oficial?.versaoAplicacao ?? "—"}</dd></div>
           <div><dt>Município emissor</dt><dd>{oficial?.localEmissao ?? nomeMunicipio(empresa.municipio)}</dd></div>
         </dl>
-        {gerada && !oficial ? <p className="pc-nota">O XML oficial ainda não está guardado aqui; alguns campos aparecem quando a Receita devolver o documento.</p> : null}
+        {gerada && !oficial ? <p className="pc-nota">XML oficial ainda não recebido. Alguns campos aparecem depois.</p> : null}
       </Cartao>
     </> : null}
 

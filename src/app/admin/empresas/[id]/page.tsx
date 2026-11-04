@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Check, FilePlus2, Pencil, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, FilePlus2, Pencil, ShieldAlert } from "@/components/icons";
 import { notFound, redirect } from "next/navigation";
 import { ServiceManager, type ManagedService } from "@/components/service-manager";
 import { FiscalConfigurationForm } from "@/components/fiscal-configuration-form";

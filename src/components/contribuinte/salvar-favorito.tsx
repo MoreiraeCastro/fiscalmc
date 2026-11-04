@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Star } from "lucide-react";
+import { Star } from "@/components/icons";
 import { salvarRascunhoComoFavoritoAction, type EstadoFavorito } from "@/app/contribuinte/favoritos/actions";
 
 /** "Salvar como favorito" no passo 4: guarda serviço, tomador, valor e IBS/CBS deste rascunho com um nome. */

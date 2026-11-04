@@ -16,7 +16,7 @@ import { nomeMunicipio } from "@/lib/contribuinte/municipios";
 import { carregarRascunho } from "@/lib/contribuinte/rascunhos";
 import { listarFavoritos } from "@/lib/contribuinte/favoritos";
 import { usarFavoritoAction } from "@/app/contribuinte/favoritos/actions";
-import { Star } from "lucide-react";
+import { Star } from "@/components/icons";
 
 export const metadata = { title: "Emissão completa" };
 
@@ -50,8 +50,8 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
         <div><dt>Valor do serviço</dt><dd>R$ {formatarValor(subst.valorCentavos)}</dd></div>
       </dl>
     </Cartao> : null}
-    {!empresa.podeEmitir ? <Aviso tipo="alerta">Seu usuário consulta esta empresa, mas não tem permissão para emitir por ela.</Aviso> : null}
-    {empresa.emissaoBloqueada ? <Aviso tipo="alerta">A emissão desta empresa está <strong>bloqueada</strong> até o escritório concluir o cadastro. Dá para preencher o rascunho, mas não emitir.</Aviso> : null}
+    {!empresa.podeEmitir ? <Aviso tipo="alerta">Sem permissão para emitir por esta empresa.</Aviso> : null}
+    {empresa.emissaoBloqueada ? <Aviso tipo="alerta">Emissão bloqueada até o escritório concluir o cadastro. O rascunho pode ser preenchido.</Aviso> : null}
   </>;
 
   if (passo.slug === "pessoas") {
@@ -77,8 +77,8 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
       usados: servicos.map((item) => ({ id: item.id, codigoNacionalId: item.codigoNacionalId, codigoMunicipal: item.codigoMunicipal, nbs: item.nbs, automatico: item.automatico })),
     };
     const avisoPerfil = modo.perfilAceito ? null : <Aviso tipo="alerta">{modo.exigeRevisao
-      ? <>Esta empresa só emite com a configuração fiscal revisada pelo escritório, e ela ainda não foi revisada.</>
-      : <>A consulta de CNPJ não informou se esta empresa é do Simples Nacional. {escritorio ? <>Escolha o regime em <Link className="pc-link" href={`/admin/empresas/${empresa.id}?tab=fiscal`}>Configuração fiscal</Link> antes de emitir.</> : "Peça ao escritório para informar o regime antes de emitir."}</>}</Aviso>;
+      ? <>Configuração fiscal ainda não revisada pelo escritório.</>
+      : <>Regime tributário não informado na consulta do CNPJ. {escritorio ? <>Escolha o regime em <Link className="pc-link" href={`/admin/empresas/${empresa.id}?tab=fiscal`}>Configuração fiscal</Link> antes de emitir.</> : "O escritório precisa informar o regime."}</>}</Aviso>;
     return <>{cabecalho}{avisoPerfil}<FormServico rascunhoId={rascunhoId!} escritorio={escritorio} empresaId={empresa.id} nacional={nacional}
       ibsCbs={dados.informarIbsCbs ? dados.ibsCbs ?? { cst: IBS_CBS_PADRAO.cst, classificacao: IBS_CBS_PADRAO.classification, indicadorOperacao: IBS_CBS_PADRAO.operationIndicator, consumoPessoal: IBS_CBS_PADRAO.finalConsumer } : null}
       inicial={{ modeloId: dados.servico?.modeloId ?? "", descricao: dados.servico?.descricao ?? "" }}

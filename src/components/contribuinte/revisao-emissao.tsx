@@ -45,8 +45,7 @@ export async function RevisaoEmissao({ rascunho, empresa, escritorio, servicos, 
   const enderecoTomador = tomador ? [tomador.street, tomador.address_number, tomador.address_complement, tomador.neighborhood, exterior ? tomador.city : "", exterior ? tomador.state : ""].filter(Boolean).join(", ") : "";
   const tomadorTexto = !tomador ? "Não informado" : exterior ? `${tomador.foreign_tax_id ? `NIF ${tomador.foreign_tax_id}` : "Sem NIF"} - ${tomador.legal_name}` : `${formatarDocumento(tomador.tax_id)} - ${tomador.legal_name}`;
   return <>
-    {subst ? <Aviso>Revise a DPS comparando com a NFS-e que será substituída. Os campos <span className="pc-mudou">destacados</span> mudaram. Ao emitir, a original fica cancelada por substituição.</Aviso>
-      : <Aviso>Revise a sua DPS e confira o cálculo prévio do imposto. Estando tudo certo, clique em <strong>Emitir NFS-e</strong>.</Aviso>}
+    {subst ? <Aviso>Em <span className="pc-mudou">destaque</span>, o que mudou em relação à nota original. Ao emitir, a original é cancelada por substituição.</Aviso> : null}
     {subst && original ? <Cartao titulo="Comparação">
       <div className="pc-tabela-rolagem"><table className="pc-tabela pc-comparacao">
         <thead><tr><th>Campo</th><th>NFS-e original</th><th>NFS-e substituta</th></tr></thead>
@@ -133,7 +132,7 @@ export async function RevisaoEmissao({ rascunho, empresa, escritorio, servicos, 
           <div className="total"><dt>Valor líquido</dt><dd>R$ {formatarValor(contas.liquido)}</dd></div>
         </dl></section>
       </div>
-      {emitente.simples ? <p className="pc-nota">Empresa do Simples Nacional: o ISSQN mostrado é informativo; o recolhimento segue o regime de apuração do Simples.</p> : null}
+      {emitente.simples ? <p className="pc-nota">Simples Nacional: ISSQN informativo, recolhido no DAS.</p> : null}
     </Cartao>
     {!servico ? <Aviso tipo="erro">O serviço escolhido não está mais pronto para emissão. Volte ao passo Serviço.</Aviso>
       : empresa.podeEmitir && !empresa.emissaoBloqueada && (tomador || dados.semTomador) && (!exterior || comercio) ? <BotaoEmitir rascunhoId={rascunho.id} chave={rascunho.chave} producao={producao} voltar={voltar} rotulo={subst ? "Emitir NFS-e Substituta" : "Emitir NFS-e"}

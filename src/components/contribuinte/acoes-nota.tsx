@@ -2,7 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, LoaderCircle, Printer, RefreshCw, Repeat2, X } from "lucide-react";
+import { Ban, LoaderCircle, Printer, RefreshCw, Repeat2, X } from "@/components/icons";
 import { cancelarNfseAction, consultarCancelamentoAction, substituirNfseAction, type EstadoCancelamento } from "@/app/contribuinte/nfse/actions";
 import { apiUrl } from "@/lib/base-path";
 import { MOTIVOS_CANCELAMENTO } from "@/lib/contribuinte/dps";
@@ -102,7 +102,7 @@ export function SolicitarCancelamento({ notaId }: { notaId: string }) {
       <div className="pc-janela pc-janela-form" role="dialog" aria-modal aria-label="Solicitar cancelamento">
         <header><h2>Solicitar cancelamento</h2><button type="button" className="pc-icone-botao" onClick={() => setAberto(false)} aria-label="Fechar"><X size={18} aria-hidden /></button></header>
         <div className="pc-form">
-          <p className="pc-texto">O pedido vai para o escritório, que confere e cancela a nota na Receita.</p>
+          <p className="pc-texto">O escritório confere e cancela a nota na Receita.</p>
           {mensagem ? <div className="pc-aviso erro">{mensagem}</div> : null}
           <Campo rotulo="Motivo do cancelamento" obrigatorio dica="De 15 a 255 caracteres." id="motivo-cliente">
             <textarea id="motivo-cliente" rows={4} maxLength={255} value={motivo} onChange={(e) => setMotivo(e.target.value)} />

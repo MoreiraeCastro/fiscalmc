@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, FilePlus2, Plus, Search } from "lucide-react";
+import { ArrowUpRight, FilePlus2, Plus, Search } from "@/components/icons";
 import { redirect } from "next/navigation";
 import { requireOfficeDataClient } from "@/lib/auth/session";
 import { EmptyState, PageHeader, StatusBadge, formatTaxId } from "@/components/ui-kit";

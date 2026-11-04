@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { CheckCircle2, ChevronDown, LoaderCircle, ShieldCheck, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, LoaderCircle, ShieldCheck, XCircle } from "@/components/icons";
 import { apiUrl } from "@/lib/base-path";
 import type { IssueService } from "@/components/issue-form";
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Download, FileCode2 } from "lucide-react";
+import { ArrowLeft, Download, FileCode2 } from "@/components/icons";
 import { Aviso, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { BotaoImprimir } from "@/components/contribuinte/acoes-nota";
 import { apiUrl } from "@/lib/base-path";
@@ -56,8 +56,8 @@ export default async function VisualizarRecebida({ params }: { params: Promise<{
     </div>
 
     {nota.cancelled_at ? <Aviso tipo="erro"><strong>Esta NFS-e foi cancelada pelo prestador</strong> em {formatarDataHora(nota.cancelled_at)}.</Aviso> : null}
-    {nota.role === "INTERMEDIARIO" ? <Aviso>A empresa aparece nesta nota como <strong>intermediária</strong> do serviço.</Aviso> : null}
-    {!oficial ? <Aviso tipo="alerta">Não foi possível ler o XML desta nota. Baixe o XML ou o PDF para conferir.</Aviso> : null}
+    {nota.role === "INTERMEDIARIO" ? <Aviso>Empresa <strong>intermediária</strong> nesta nota.</Aviso> : null}
+    {!oficial ? <Aviso tipo="alerta">XML ilegível. Baixe o XML ou o PDF para conferir.</Aviso> : null}
 
     <div className="pc-grade-2">
       <Cartao titulo="Identificação da NFS-e" acoes={<span className={`pc-situacao ${nota.cancelled_at ? "erro" : "ok"}`}><i aria-hidden />{nota.cancelled_at ? "Cancelada" : "NFS-e Gerada"}</span>}>

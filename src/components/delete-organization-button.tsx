@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, LoaderCircle, Trash2 } from "lucide-react";
+import { AlertTriangle, LoaderCircle, Trash2 } from "@/components/icons";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiUrl } from "@/lib/base-path";

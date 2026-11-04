@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle } from "@/components/icons";
 import { apiUrl } from "@/lib/base-path";
 
 /**

@@ -111,12 +111,12 @@ export function TributacaoFederal({ inicial, valorServico, descIncond, erros, re
 
   if (regime === "simples") return <Cartao titulo="Retenções federais">
     <input type="hidden" name="cst" value="00" />
-    <p className="pc-nota">Empresa do Simples Nacional: PIS e COFINS são pagos no DAS e não vão na nota. Preencha só se o tomador reteve algum tributo.</p>
+    <p className="pc-nota">Simples Nacional: PIS e COFINS vão no DAS. Preencha só se houve retenção.</p>
     <div className="pc-grade">{retencoes}</div>
   </Cartao>;
 
   return <Cartao titulo="Tributação federal">
-    {padrao && !inicial ? <p className="pc-nota">Preenchido pelo regime da empresa ({regime === "real" ? "lucro real" : "lucro presumido"}): CST 01, PIS {percentual(padrao.pisBp)}% e COFINS {percentual(padrao.cofinsBp)}% sobre o valor do serviço. Ajuste só se esta nota for diferente.</p> : null}
+    {padrao && !inicial ? <p className="pc-nota">{regime === "real" ? "Lucro real" : "Lucro presumido"}: CST 01, PIS {percentual(padrao.pisBp)}% e COFINS {percentual(padrao.cofinsBp)}%.</p> : null}
     <div className="pc-grade">
       <Campo rotulo="Situação Tributária do PIS/COFINS" obrigatorio erro={erros.cst} id="cst" largura="inteira">
         <select id="cst" name="cst" className="pc-input" value={cst} onChange={(e) => setCst(e.target.value)}>
@@ -135,9 +135,9 @@ export function TributacaoFederal({ inicial, valorServico, descIncond, erros, re
           {Object.entries(RETENCAO_PIS_COFINS).map(([codigo, rotulo]) => <option key={codigo} value={codigo}>{codigo} - {rotulo}</option>)}
         </select>
       </Campo> : null}
-      {semValor ? <p className="pc-nota">Com o CST {cst} a nota leva só a situação tributária, sem base nem valores de PIS/COFINS.</p> : null}
+      {semValor ? <p className="pc-nota">CST {cst}: sem base nem valores de PIS/COFINS.</p> : null}
       {retencoes}
     </div>
-    <p className="pc-nota">As retenções reduzem o valor líquido da nota. O PIS/COFINS acima é o débito da empresa e não altera o líquido.</p>
+    <p className="pc-nota">Retenções reduzem o líquido. O PIS/COFINS acima, não.</p>
   </Cartao>;
 }

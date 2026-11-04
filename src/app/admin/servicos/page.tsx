@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BriefcaseBusiness, Search } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, Search } from "@/components/icons";
 import { redirect } from "next/navigation";
 import { EmptyState, PageHeader, StatusBadge, formatDateTime } from "@/components/ui-kit";
 import { requireOfficeSession } from "@/lib/auth/session";

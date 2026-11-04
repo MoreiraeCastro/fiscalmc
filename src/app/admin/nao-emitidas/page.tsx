@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CircleCheck } from "lucide-react";
+import { ArrowRight, CircleCheck } from "@/components/icons";
 import { redirect } from "next/navigation";
 import { DismissPendencyButton } from "@/components/dismiss-pendency-button";
 import { ReconcileInvoiceButton } from "@/components/reconcile-invoice-button";

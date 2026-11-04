@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, ChevronLeft, ChevronRight, FileCheck2, FileText, LoaderCircle, Search, Send, UserPlus, WifiOff } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, FileCheck2, FileText, LoaderCircle, Search, Send, UserPlus, WifiOff } from "@/components/icons";
 import { useEffect, useState } from "react";
 import { getInvoicePresentation } from "@/lib/invoices/presentation";
 import { canAdvanceClientIssuance, clientIssuanceSteps, getCatalogSelectionOutcome, mergeCatalogPage, type ClientIssuanceStep } from "@/lib/issuance/client-flow";

@@ -1,4 +1,4 @@
-import { History } from "lucide-react";
+import { History } from "@/components/icons";
 import { buildInvoiceTimeline, type InvoiceTimelineAttempt } from "@/lib/invoices/presentation";
 import { formatDateTime } from "./ui-kit";
 

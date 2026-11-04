@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle } from "@/components/icons";
 import { registrarResultadoAction } from "@/app/contribuinte/dps/actions";
 import { apiUrl } from "@/lib/base-path";
 import type { ExtrasDps } from "@/lib/contribuinte/extras-dps";

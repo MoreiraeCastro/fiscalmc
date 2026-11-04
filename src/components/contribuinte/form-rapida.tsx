@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useState, useTransition } from "react";
-import { History, LoaderCircle, Search, X } from "lucide-react";
+import { History, LoaderCircle, Search, X } from "@/components/icons";
 import { consultarTomador, salvarRapida, type EstadoPasso } from "@/app/contribuinte/dps/actions";
 import { formatarDocumento } from "@/lib/contribuinte/formato";
 import type { TomadorSalvo } from "@/lib/contribuinte/emissao";

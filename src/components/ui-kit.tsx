@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Inbox } from "lucide-react";
+import { ArrowRight, Inbox } from "@/components/icons";
 
 export function PageHeader({
   title,

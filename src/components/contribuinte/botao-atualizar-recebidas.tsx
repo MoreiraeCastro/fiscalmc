@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { RotateCw } from "lucide-react";
+import { RotateCw } from "@/components/icons";
 import { atualizarRecebidas, type EstadoAtualizacao } from "@/app/contribuinte/notas/recebidas/actions";
 
 export function BotaoAtualizarRecebidas() {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building2, ChevronLeft, CircleAlert, KeyRound, LoaderCircle, MapPin, ShieldCheck } from "lucide-react";
+import { Building2, ChevronLeft, CircleAlert, KeyRound, LoaderCircle, MapPin, ShieldCheck } from "@/components/icons";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiUrl } from "@/lib/base-path";

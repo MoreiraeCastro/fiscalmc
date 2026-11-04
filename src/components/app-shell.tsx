@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { BriefcaseBusiness, Building2, CircleAlert, FileCheck2, FilePlus2, FileText, Home, LogOut, Menu, ScrollText, Settings, ShieldCheck, UserRound, UsersRound, XCircle } from "lucide-react";
+import { BriefcaseBusiness, Building2, CircleAlert, FileCheck2, FilePlus2, FileText, Home, LogOut, Menu, ScrollText, Settings, ShieldCheck, UserRound, UsersRound, XCircle } from "@/components/icons";
 import { Brand } from "./brand";
 import { ShellNavLink } from "./shell-nav-link";
 import { getShellIdentity } from "@/lib/auth/session";

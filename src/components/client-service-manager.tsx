@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, Clock3, MessageCircleWarning, Pencil, Plus, Send, X } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, MessageCircleWarning, Pencil, Plus, Send, X } from "@/components/icons";
 import { StatusBadge, formatDateTime } from "@/components/ui-kit";
 import { getClientServiceStatusLabel, type ServiceWorkflowStatus } from "@/lib/services/workflow";
 import { apiUrl } from "@/lib/base-path";

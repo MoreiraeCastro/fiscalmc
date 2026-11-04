@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { LogOut } from "@/components/icons";
 import { logout } from "@/app/login/actions";
 import { BASE_PATH } from "@/lib/base-path";
 import type { ContextoContribuinte } from "@/lib/contribuinte/contexto";

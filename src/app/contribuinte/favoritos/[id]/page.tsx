@@ -22,8 +22,8 @@ export default async function FavoritoPage({ params }: { params: Promise<{ id: s
   return <>
     <Trilha itens={[["Serviços Favoritos", "/contribuinte/favoritos"], novo ? "Novo" : favorito!.nome]} />
     <h1 className="pc-titulo">{novo ? "Novo Serviço Favorito" : "Editar Serviço Favorito"}</h1>
-    {lotado ? <Aviso tipo="alerta">Esta empresa já tem {FAVORITOS_MAX} serviços favoritos, o máximo. Exclua um para incluir outro.</Aviso> : null}
-    {!servicos.length ? <Aviso tipo="alerta">A empresa ainda não tem serviço pronto para emissão; o favorito precisa de um serviço.</Aviso> : null}
+    {lotado ? <Aviso tipo="alerta">Limite de {FAVORITOS_MAX} favoritos atingido. Exclua um para incluir outro.</Aviso> : null}
+    {!servicos.length ? <Aviso tipo="alerta">Nenhum serviço liberado para emissão nesta empresa.</Aviso> : null}
     {!lotado ? <FormFavorito favoritoId={novo ? null : id}
       servicos={servicos.map((item) => ({ id: item.id, rotulo: `${item.codigo ? `${item.codigo} - ` : ""}${item.descricaoCodigo ?? item.nome}`, descricaoPadrao: item.descricaoPadrao }))}
       tomadores={tomadores.map((item) => ({ id: item.id, documento: item.documento, nome: item.nome }))}

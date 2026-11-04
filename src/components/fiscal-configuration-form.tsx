@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, CircleAlert, LoaderCircle, Save, ShieldCheck } from "lucide-react";
+import { CheckCircle2, CircleAlert, LoaderCircle, Save, ShieldCheck } from "@/components/icons";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FiscalConfigurationForm as FiscalForm,FiscalConfigurationStatus,FiscalTechnicalConfiguration } from "@/lib/nfse/fiscal-configuration";

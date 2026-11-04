@@ -47,8 +47,11 @@ export default async function RecebidasPage({ searchParams }: { searchParams: Pr
         <div className="pc-filtros-botoes"><button className="pc-botao" type="submit">Filtrar</button>{filtrando ? <Link className="pc-link" href="/contribuinte/notas/recebidas">Limpar</Link> : null}</div>
       </form>
       {!leitura?.last_sync_at
-        ? <Aviso>As notas recebidas vêm do Ambiente de Dados Nacional (ADN), lidas com o certificado A1 da empresa. A primeira leitura traz todo o histórico; clique em <strong>Atualizar agora</strong> para começar.</Aviso>
-        : <Aviso>Notas em que a empresa é tomadora ou intermediária, lidas do ADN. Última leitura: <strong>{formatarDataHora(leitura.last_sync_at)}</strong>; a próxima é automática (de 2 em 2 horas).{leitura.last_status === "FALHA" ? <> A última tentativa falhou: {leitura.last_error}</> : null}</Aviso>}
+        ? <p className="pc-meta">Nenhuma leitura feita ainda.</p>
+        : <>
+          <p className="pc-meta">Última leitura do ADN: {formatarDataHora(leitura.last_sync_at)} · atualiza a cada 2 horas</p>
+          {leitura.last_status === "FALHA" ? <Aviso tipo="erro">A última leitura falhou: {leitura.last_error}</Aviso> : null}
+        </>}
       {linhas.length
         ? <div className="pc-tabela-rolagem">
           <table className="pc-tabela">

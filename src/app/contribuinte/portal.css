@@ -32,10 +32,10 @@ a.pc-empresa:hover { background: var(--surface-2); }
 .pc-cartao { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; display: grid; gap: 12px; align-content: start; min-width: 0; }
 .pc-cartao-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .pc-cartao-topo h2 { margin: 0; font-size: 13px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--emerald-dark); }
-.pc-aviso { border-radius: 8px; padding: 11px 14px; font-size: 13.5px; line-height: 1.5; border: 1px solid #bcd9f2; background: #eaf4fd; color: #123a5d; }
-.pc-aviso.alerta { border-color: #f0c36a; background: var(--amber-soft); color: #583500; }
-.pc-aviso.sucesso { border-color: #9fd9c9; background: var(--emerald-soft); color: var(--emerald-dark); }
-.pc-aviso.erro { border-color: #efb4b4; background: var(--red-soft); color: #8a1f1f; }
+.pc-aviso { padding: 7px 12px; border: 0; border-left: 3px solid #9bb3c9; border-radius: 0 6px 6px 0; background: transparent; color: var(--navy); font-size: 13.5px; line-height: 1.5; }
+.pc-aviso.alerta { border-left-color: #d99a1e; background: #fdf7ea; color: #583500; }
+.pc-aviso.sucesso { border-left-color: #2f9e7d; background: #f0f9f5; color: var(--emerald-dark); }
+.pc-aviso.erro { border-left-color: #c94444; background: #fcf1f1; color: #8a1f1f; }
 .pc-botao { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 14px; border: 1px solid var(--navy); border-radius: 8px; background: var(--navy); color: #fff; font-size: 14px; font-weight: 650; cursor: pointer; }
 .pc-botao:hover { background: var(--navy-2); }
 .pc-botao.secundario { background: #fff; color: var(--navy); border-color: var(--border); }
@@ -329,3 +329,4 @@ button.pc-link { justify-self: start; margin-top: 8px; padding: 0; border: 0; ba
 .pc-soltar.ativo { border-color: var(--navy); background: #eaf4fd; }
 .pc-soltar p { margin: 0; font-size: 14px; }
 .pc-erro-texto { color: #8a1f1f; font-size: 13px; }
+.pc-meta { margin: 0 0 12px; color: var(--muted); font-size: 12.5px; }

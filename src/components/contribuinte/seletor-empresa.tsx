@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Check, ChevronDown, Search } from "lucide-react";
+import { Check, ChevronDown, Search } from "@/components/icons";
 import { escolherEmpresa } from "@/app/contribuinte/empresa/actions";
 import { formatarDocumento } from "@/lib/contribuinte/formato";
 

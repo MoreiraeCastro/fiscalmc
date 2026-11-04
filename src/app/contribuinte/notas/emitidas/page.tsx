@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { FilePlus2, RotateCw } from "lucide-react";
-import { Aviso, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
+import { FilePlus2, RotateCw } from "@/components/icons";
+import { Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { TabelaNotas } from "@/components/contribuinte/tabela-notas";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
 import { listarEmitidas, POR_PAGINA } from "@/lib/contribuinte/notas";
@@ -42,7 +42,6 @@ export default async function EmitidasPage({ searchParams }: { searchParams: Pro
         <label><span>Data Final</span><input type="date" name="ate" defaultValue={ate} /></label>
         <div className="pc-filtros-botoes"><button className="pc-botao" type="submit">Filtrar</button>{filtrando ? <Link className="pc-link" href="/contribuinte/notas/emitidas">Limpar</Link> : null}</div>
       </form>
-      {!filtrando ? <Aviso>São exibidas todas as notas da empresa, da mais recente para a mais antiga. Para um período, informe as datas e clique em <strong>Filtrar</strong>.</Aviso> : null}
       {linhas.length
         ? <TabelaNotas linhas={linhas} municipio={nomeMunicipio(empresa.municipio)} escritorio={escritorio} />
         : <p className="pc-vazio">{filtrando ? "Nenhuma NFS-e encontrada com esses filtros." : "Nenhuma NFS-e emitida ainda para esta empresa."}</p>}

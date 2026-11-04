@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, LoaderCircle, ShieldCheck } from "lucide-react";
+import { AlertTriangle, LoaderCircle, ShieldCheck } from "@/components/icons";
 import { apiUrl } from "@/lib/base-path";
 
 export function EmissionBlockToggle({ organizationId, blocked, readinessComplete }: { organizationId: string; blocked: boolean; readinessComplete: boolean }) {

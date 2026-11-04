@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, FilePlus2, Search } from "lucide-react";
+import { ArrowUpRight, FilePlus2, Search } from "@/components/icons";
 import { useDeferredValue, useMemo, useState } from "react";
 import { getInvoicePresentation } from "@/lib/invoices/presentation";
 import { EmptyState, StatusBadge, formatCurrency, formatDate, formatDateTime } from "./ui-kit";

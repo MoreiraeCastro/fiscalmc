@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircle, XCircle } from "lucide-react";
+import { LoaderCircle, XCircle } from "@/components/icons";
 import { useState } from "react";
 import { apiUrl } from "@/lib/base-path";
 

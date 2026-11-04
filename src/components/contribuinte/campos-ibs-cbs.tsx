@@ -37,6 +37,6 @@ export function CamposIbsCbs({ inicial, erros, prefixo = "" }: { inicial: IbsCbs
       </fieldset>
       <Leitura rotulo="O destinatário é o próprio adquirente?" valor="Sim" largura="meia" />
     </div>
-    <p className="pc-nota">Base de cálculo, alíquotas e valores de IBS e CBS são calculados pela Receita na emissão.</p>
+    <p className="pc-nota">IBS e CBS calculados pela Receita na emissão.</p>
   </>;
 }

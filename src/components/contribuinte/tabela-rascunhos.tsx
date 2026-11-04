@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { Pencil } from "@/components/icons";
 import { excluirRascunhoAction } from "@/app/contribuinte/dps/actions";
 import { PASSOS } from "@/lib/contribuinte/dps";
 import { formatarCompetencia, formatarDataHora, formatarValor, pessoa } from "@/lib/contribuinte/formato";

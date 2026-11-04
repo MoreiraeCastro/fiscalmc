@@ -73,7 +73,7 @@ export function FormFavorito({ favoritoId, inicial, servicos, tomadores }: { fav
         <label><input type="radio" name="ibsCbs" value="SIM" checked={informarIbsCbs} onChange={() => setInformarIbsCbs(true)} /> Sim</label>
         <label><input type="radio" name="ibsCbs" value="NAO" checked={!informarIbsCbs} onChange={() => setInformarIbsCbs(false)} /> Não</label>
       </fieldset>
-      {informarIbsCbs ? <CamposIbsCbs inicial={inicial.ibsCbs} erros={erros} /> : <p className="pc-nota">Quando a competência exigir IBS/CBS, o passo Serviço pede as informações.</p>}
+      {informarIbsCbs ? <CamposIbsCbs inicial={inicial.ibsCbs} erros={erros} /> : <p className="pc-nota">IBS/CBS, quando exigido, é pedido no passo Serviço.</p>}
     </Cartao>
     <footer className="pc-rodape-passo">
       <Link className="pc-botao secundario" href="/contribuinte/favoritos">Voltar</Link>

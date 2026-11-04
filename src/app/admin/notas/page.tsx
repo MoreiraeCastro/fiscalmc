@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FilePlus2, Search } from "lucide-react";
+import { FilePlus2, Search } from "@/components/icons";
 import { redirect } from "next/navigation";
 import { InvoiceList, type InvoiceRow } from "@/components/invoice-list";
 import { PageHeader } from "@/components/ui-kit";

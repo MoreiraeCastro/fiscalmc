@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Ban, CopyPlus, Download, Eye, EllipsisVertical, FileCode2, Repeat2 } from "lucide-react";
+import { Ban, CopyPlus, Download, Eye, EllipsisVertical, FileCode2, Repeat2 } from "@/components/icons";
 import { emitirDeNovoAction } from "@/app/contribuinte/nfse/actions";
 
 /** Menu ⋮ da linha, com as mesmas opções do Emissor Nacional. */

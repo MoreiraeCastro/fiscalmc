@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useState, useTransition } from "react";
-import { History, LoaderCircle, Search, X } from "lucide-react";
+import { History, LoaderCircle, Search, X } from "@/components/icons";
 import { consultarTomador, salvarPessoas, type EstadoPasso } from "@/app/contribuinte/dps/actions";
 import { formatarDocumento } from "@/lib/contribuinte/formato";
 import type { TomadorSalvo } from "@/lib/contribuinte/emissao";
@@ -124,7 +124,7 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje, ib
       </fieldset>
       <input type="hidden" name="clienteId" value={clienteId} />
       <input type="hidden" name="endereco" value={endereco ? JSON.stringify(endereco) : ""} />
-      {semTomador ? <p className="pc-nota">A NFS-e sai sem tomador. Use só quando não houver tomador identificado.</p> : exterior ? <>
+      {semTomador ? <p className="pc-nota">Nota sem tomador identificado.</p> : exterior ? <>
         {exteriorSalvo && clienteId ? <div className="pc-grade">
           <Leitura rotulo="NIF" valor={exteriorSalvo.documento ?? "Não informado"} largura="terco" />
           <Leitura rotulo="Nome/Razão Social" valor={exteriorSalvo.nome} largura="meia" />
@@ -132,7 +132,7 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje, ib
           <div className="pc-campo inteira"><button type="button" className="pc-link botao" onClick={() => { setClienteId(""); setExteriorSalvo(null); }}>Trocar tomador</button></div>
         </div> : <TomadorExterior erros={erros} />}
         <button type="button" className="pc-link botao" onClick={() => setHistorico(true)}><History size={15} aria-hidden /> Últimos Tomadores</button>
-        <p className="pc-nota">Tomador no exterior: no passo Serviço você informa os dados de comércio exterior, exigidos pela Receita.</p>
+        <p className="pc-nota">Dados de comércio exterior: no passo Serviço.</p>
       </> : <>
       <div className="pc-grade">
         <Campo rotulo="CPF/CNPJ" obrigatorio erro={erros.documento ?? erros.tomador} id="documento" largura="meia">
@@ -162,7 +162,7 @@ export function FormPessoas({ rascunhoId, inicial, emitente, tomadores, hoje, ib
       </div>
       {aviso ? <p className="pc-nota">{aviso}</p> : null}
       {endereco && !clienteId ? <p className="pc-nota">Endereço: {[endereco.street, endereco.addressNumber, endereco.addressComplement, endereco.neighborhood].filter(Boolean).join(", ")} · CEP {endereco.postalCode} · {endereco.state}</p> : null}
-      {!clienteId && nome && documento ? <p className="pc-nota">Ao avançar, este tomador fica salvo para as próximas notas da empresa.</p> : null}
+      {!clienteId && nome && documento ? <p className="pc-nota">Tomador salvo para as próximas notas.</p> : null}
       </>}
     </Cartao>
 

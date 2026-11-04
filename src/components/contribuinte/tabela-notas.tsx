@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CopyPlus, Eye } from "lucide-react";
+import { CopyPlus, Eye } from "@/components/icons";
 import { emitirDeNovoAction } from "@/app/contribuinte/nfse/actions";
 import { apiUrl } from "@/lib/base-path";
 import { rotasLegadas } from "@/lib/contribuinte/contexto";

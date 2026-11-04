@@ -47,7 +47,8 @@ function lugar(nome: string | null, codigo: string | null) {
   return cidade ? `${cidade}${item?.[1] ? `/${item[1]}` : ""}` : "-";
 }
 const comCodigo = (codigo: string | null, mapa: Record<string, string>) => (codigo ? `${codigo} - ${mapa[codigo] ?? ""}`.replace(/ - $/, "") : null);
-const dataBr = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : null);
+/** "2026-09-17T13:30:19-03:00" → "17/09/2026 às 13:30:19-03:00", como a extensão mostra a data do evento. */
+const dataHoraEvento = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}${iso.length > 10 ? ` às ${iso.slice(11)}` : ""}` : null);
 function dataExcel(iso: string | null) {
   if (!iso) return null;
   return new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))));
@@ -141,7 +142,8 @@ export function linhaCompleta(xml: string, eventos: Evento[]): { valores: Record
       "Nome Prestador": texto(emit, "xNome") ?? texto(prest, "xNome"),
       "CNPJ/CPF Tomador": docTomador ?? "-",
       "Nome Tomador": texto(toma, "xNome") ?? "Não informado",
-      "Município Serviço": lugar(texto(inf, "xLocPrestacao"), texto(serv, "locPrest", "cLocPrestacao")),
+      // Como na extensão: o município emissor da nota (xLocEmi), não o local da prestação.
+      "Município Serviço": lugar(texto(inf, "xLocEmi"), texto(emit, "enderNac", "cMun") ?? texto(dps, "cLocEmi")),
       "Valor do Serviço (R$)": numero(vDps, "vServPrest", "vServ"),
       "Insc. Municipal Emitente": texto(emit, "IM") ?? "-",
       "Simples Nacional": SIMPLES[texto(prest, "regTrib", "opSimpNac") ?? ""] ?? "-",
@@ -157,7 +159,7 @@ export function linhaCompleta(xml: string, eventos: Evento[]): { valores: Record
       "Retenção ISSQN": comCodigo(texto(tribMun, "tpRetISSQN"), RETENCAO),
       "Cód. Tributação Nacional": cTribNac ? `${cTribNac} - ${texto(inf, "xTribNac") ?? ""}`.replace(/ - $/, "") : null,
       "Item da NBS": cNbs ? `${cNbs} - ${texto(inf, "xNBS") ?? ""}`.replace(/ - $/, "") : null,
-      "Descrição do Serviço": texto(cServ, "xDescServ"),
+      "Descrição do Serviço": texto(cServ, "xDescServ")?.replace(/\s+/g, " ") ?? null,
       "CST IBS/CBS": texto(ibsDps, "valores", "trib", "gIBSCBS", "CST") ?? texto(ibsDps, "valores", "trib", "CST"),
       "Class. Tributária IBS/CBS": texto(ibsDps, "valores", "trib", "gIBSCBS", "cClassTrib") ?? texto(ibsDps, "valores", "trib", "cClassTrib"),
       "Indicador da Operação": texto(ibsDps, "cIndOp"),
@@ -176,7 +178,7 @@ export function linhaCompleta(xml: string, eventos: Evento[]): { valores: Record
       "Alíq. Efetiva IBS Municipal (%)": numero(vIbs, "mun", "pAliqEfetMun"),
       "Valor IBS Municipal (R$)": numero(tot, "gIBS", "gIBSMunTot", "vIBSMun"),
       "Valor IBS Total (R$)": numero(tot, "gIBS", "vIBSTot"),
-      "Sit. Trib. PIS/COFINS": comCodigo(texto(pc, "CST"), CST_PIS_COFINS) ?? "Não informado",
+      "Sit. Trib. PIS/COFINS": texto(pc, "CST") && texto(pc, "CST") !== "00" ? comCodigo(texto(pc, "CST"), CST_PIS_COFINS) : "Não informado",
       "BC PIS/COFINS (R$)": numero(pc, "vBCPisCofins") ?? 0,
       "PIS - Alíquota (%)": numero(pc, "pAliqPis") ?? 0,
       "PIS - Débito (R$)": numero(pc, "vPis") ?? 0,
@@ -189,10 +191,10 @@ export function linhaCompleta(xml: string, eventos: Evento[]): { valores: Record
       "% Total Tributos (SN)": totalTributos,
       "Insc. Municipal Tomador": texto(toma, "IM") ?? "-",
       "Informações Complementares": texto(serv, "infoCompl", "xInfComp") ?? "-",
-      "Evento": evento ? [evento.codigo, evento.descricao].filter(Boolean).join(" - ") : null,
+      "Evento": evento ? `Evento de ${evento.descricao ?? evento.codigo ?? ""}`.trim() : null,
       "Autor do Evento": evento?.autor ?? null,
-      "Data do Evento": evento ? dataBr(evento.data) : null,
-      "Data Registro do Evento": evento ? dataBr(evento.registro) : null,
+      "Data do Evento": evento ? dataHoraEvento(evento.data) : null,
+      "Data Registro do Evento": evento ? dataHoraEvento(evento.registro) : null,
       "Situação": situacao,
       "Chave NFS-e": (texto(inf, "@_Id") ?? "").replace(/^NFS/, ""),
     },
@@ -270,6 +272,21 @@ export async function gerarRelacao(input: { empresaId: string; razaoSocial: stri
   relacao.getRow(1).font = { bold: true };
   for (const linha of linhas) relacao.addRow(colunas.map((titulo) => linha.valores[titulo] ?? null));
   relacao.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, linhas.length + 1), column: colunas.length } };
+
+  // Linha de total, como na extensão: soma só as notas "Normal" e respeita o filtro do Excel (SUBTOTAL ignora o que está oculto).
+  if (linhas.length) {
+    const ultima = linhas.length + 1;
+    const situacao = relacao.getColumn(colunas.indexOf("Situação") + 1).letter;
+    const dinheiro = colunas.map((titulo, i) => (titulo.includes("(R$)") ? i + 1 : 0)).filter(Boolean);
+    const total = relacao.getRow(ultima + 1);
+    const normais = linhas.filter((l) => l.situacao === "Normal").length;
+    total.getCell(dinheiro[0] - 1).value = `TOTAL só normais (${normais} ${normais === 1 ? "nota" : "notas"})`;
+    for (const coluna of dinheiro) {
+      const letra = relacao.getColumn(coluna).letter;
+      total.getCell(coluna).value = { formula: `SUMPRODUCT(SUBTOTAL(109,OFFSET(${letra}2,ROW(${letra}2:${letra}${ultima})-ROW(${letra}2),0)),--(${situacao}2:${situacao}${ultima}="Normal"))` };
+    }
+    total.font = { bold: true };
+  }
 
   const resumo = livro.addWorksheet("Resumo");
   resumo.columns = [{ header: "Situação", key: "s", width: 16 }, { header: "Qtd", key: "q", width: 8 }, { header: "Valor (R$)", key: "v", width: 18, style: { numFmt: "#,##0.00" } }];

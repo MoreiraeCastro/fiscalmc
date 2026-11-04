@@ -48,7 +48,10 @@ export async function sincronizarRecebidas(db: SupabaseClient, organizationId: s
   try {
     for (let lote = 0; lote < LOTES_POR_RODADA; lote++) {
       if (lote) await dormir(PAUSA_ENTRE_LOTES_MS);
-      const resposta = await http.requestText({ url: `${distributionEndpoints[ambiente]}/DFe/${ultimoNsu}?lote=true`, organizationId });
+      // Desde 31/10/2026 o ADN rejeita (REJEICAO, sem mensagem) a consulta que não diz de qual inscrição são as notas.
+      const inscricao = empresa.tax_id.replace(/\D/g, "");
+      const consulta = inscricao.length === 11 ? `cpfConsulta=${inscricao}` : `cnpjConsulta=${inscricao}`;
+      const resposta = await http.requestText({ url: `${distributionEndpoints[ambiente]}/DFe/${ultimoNsu}?lote=true&${consulta}`, organizationId });
       if (resposta.status === 429) { espera = new Date(Date.now() + ESPERA_APOS_429_MS); status = "AGUARDANDO"; mensagem = "O ADN limitou as consultas; a leitura continua mais tarde."; break; }
       const corpo = lerRespostaDistribuicao(resposta.body);
       // 404 com NENHUM_DOCUMENTO_LOCALIZADO é resposta de negócio: não há nada depois deste NSU.
@@ -69,7 +72,7 @@ export async function sincronizarRecebidas(db: SupabaseClient, organizationId: s
     status = "FALHA";
     mensagem = "Não foi possível ler as notas no ADN agora.";
     espera = new Date(Date.now() + ESPERA_APOS_FALHA_MS);
-    logEvent("error", "RECEIVED_DOCUMENTS_SYNC_FAILED", { organizationId, code: (error as { code?: string }).code ?? "UNKNOWN", lastNsu: ultimoNsu });
+    logEvent("error", "RECEIVED_DOCUMENTS_SYNC_FAILED", { organizationId, code: (error as { code?: string }).code ?? "UNKNOWN", lastNsu: ultimoNsu, detail: String((error as Error).message ?? "").slice(0, 300) });
   } finally {
     await db.from("received_document_cursors").update({
       locked_until: null, last_sync_at: new Date().toISOString(), last_status: status, last_error: status === "FALHA" ? mensagem : null,

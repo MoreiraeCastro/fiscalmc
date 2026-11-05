@@ -17,7 +17,7 @@ export async function officeLogin(formData: FormData) {
   if (error || !data.user) redirect("/login/escritorio?error=invalid_credentials");
   const { data: memberships } = await client.from("memberships").select("role,active").eq("user_id", data.user.id).eq("active", true);
   if (!memberships?.some((item) => item.role === "SUPER_ADMIN" || item.role === "OFFICE_STAFF")) {
-    await client.auth.signOut();
+    await client.auth.signOut({ scope: "local" });
     redirect("/login/escritorio?error=invalid_credentials");
   }
   redirect("/contribuinte");

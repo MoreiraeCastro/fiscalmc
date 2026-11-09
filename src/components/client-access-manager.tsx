@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Copy, KeyRound, LockKeyhole, RotateCcw, ShieldCheck, UserRoundPlus } from "@/components/icons";
 import { apiUrl } from "@/lib/base-path";
+import { confirmar } from "@/components/confirmar";
 
 type Access = { cnpj: string; status: "ACTIVE" | "BLOCKED" | "INVALID"; createdAt: string; blockedAt: string | null };
 type AccessResult = { access: Access | null; readiness: { ready: boolean; status: string; message: string } };
@@ -39,7 +40,7 @@ export function ClientAccessManager({ organizationId, organizationTaxId, initial
   }
 
   async function generate(mode: Mode) {
-    if (mode === "RESET" && !window.confirm("Gerar uma nova senha? A senha atual do cliente deixa de funcionar.")) return;
+    if (mode === "RESET" && !(await confirmar("Gerar uma nova senha?\nA senha atual do cliente deixa de funcionar.", { acao: "Gerar nova senha", perigo: true }))) return;
     const ok = mode === "CREATE" ? await request("POST", { generate: true }) : await request("PATCH", { action: mode === "REPAIR" ? "REPAIR_GENERATED" : "RESET_PASSWORD_GENERATED" });
     if (ok) setNotice(mode === "CREATE" ? "Acesso criado." : mode === "REPAIR" ? "Acesso do cliente reparado." : "Nova senha gerada.");
   }
@@ -53,7 +54,7 @@ export function ClientAccessManager({ organizationId, organizationTaxId, initial
   }
 
   async function changeState(action: "BLOCK" | "REACTIVATE") {
-    if (action === "BLOCK" && !window.confirm("Bloquear este acesso agora? O cliente deixará de acessar a área da empresa.")) return;
+    if (action === "BLOCK" && !(await confirmar("Bloquear este acesso agora?\nO cliente deixará de acessar a área da empresa.", { acao: "Bloquear", perigo: true }))) return;
     if (await request("PATCH", { action })) setNotice(action === "BLOCK" ? "Acesso bloqueado." : "Acesso reativado.");
   }
 

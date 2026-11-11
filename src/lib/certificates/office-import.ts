@@ -1,0 +1,152 @@
+import "server-only";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { encryptSecret } from "@/lib/nfse/certificate/encryption";
+import { validateA1, type CertificateMetadata } from "@/lib/nfse/certificate/parse";
+import { classifyCertificate } from "@/lib/nfse/certificate/status";
+import { certificateHolderName } from "@/lib/nfse/certificate/presentation";
+import { ensureAutomaticTaxProfile } from "@/lib/organizations/automatic-tax-profile";
+import { resolveCnaeActivity } from "@/lib/organizations/cnae-activity-resolver";
+import { createServiceFromNationalCode } from "@/lib/services/catalog-linking";
+
+/**
+ * Cadastro de A1 pelo escritório (tela "Subir certificado" do portal e importação em lote):
+ * emissor (cofre + empresa nova quando falta) e controle de certificados (vencimento), num passo só.
+ * A senha só é usada para abrir o arquivo e vai cifrada para o cofre; nunca para log ou resposta.
+ */
+
+export type A1Aberto = { buffer: Buffer; senha: string; meta: CertificateMetadata; vencido: boolean };
+export type ResultadoA1 = { documento: string; titular: string; validade: string; emissor: string; controle: string; organizationId?: string; empresaNova?: boolean };
+
+const dia = (iso: string) => iso.slice(0, 10);
+const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Tenta as senhas na ordem. null = nenhuma abriu; "ILEGIVEL" = abriu mas não é um A1 legível. */
+export function abrirA1(buffer: Buffer, senhas: string[]): A1Aberto | "ILEGIVEL" | null {
+  for (const senha of senhas) {
+    const v = validateA1(buffer, senha);
+    if (v.status === "INVALID_PASSWORD") continue;
+    if (!v.metadata) return "ILEGIVEL";
+    return { buffer, senha, meta: v.metadata, vencido: v.status !== "VALID" };
+  }
+  return null;
+}
+
+/** CNPJ do titular, ou o CPF do e-CPF (fim do CN "NOME:CPF"). */
+export function documentoDoA1(meta: CertificateMetadata) {
+  if (meta.ownerTaxId) return meta.ownerTaxId;
+  const m = meta.subject.match(/:(\d{11})(?:,|$)/);
+  return m ? m[1] : null;
+}
+
+function clienteDoControle(): SupabaseClient | null {
+  const url = process.env.CONTROLE_SUPABASE_URL;
+  const key = process.env.CONTROLE_SUPABASE_SECRET_KEY;
+  return url && key ? createClient(url, key, { auth: { persistSession: false } }) : null;
+}
+
+async function consultaCnpj(cnpj: string) {
+  for (let t = 0; t < 4; t++) {
+    const r = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, { headers: { accept: "application/json", "user-agent": "Mozilla/5.0 (compatible; FiscalMC/1.0)" }, signal: AbortSignal.timeout(15_000) }).catch(() => null);
+    if (r?.ok) return (await r.json()) as Record<string, unknown>;
+    if (r?.status === 404) return null;
+    await dormir(5_000 * (t + 1));
+  }
+  return null;
+}
+
+/** Empresa nova no emissor com os dados públicos do CNPJ, liberada, com perfil fiscal automático (quando a Receita informa o regime). */
+async function criarEmpresa(db: SupabaseClient, cnpj: string, atorId: string | null): Promise<string | { erro: string }> {
+  const c = await consultaCnpj(cnpj);
+  const municipio = c?.codigo_municipio_ibge ? String(c.codigo_municipio_ibge) : "";
+  if (!c || !/^\d{7}$/.test(municipio)) return { erro: "a consulta do CNPJ não respondeu" };
+  const cnae = c.cnae_fiscal ? String(c.cnae_fiscal).padStart(7, "0") : null;
+  const txt = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const { data, error } = await db.from("organizations").insert({
+    legal_name: txt(c.razao_social) ?? cnpj, trade_name: txt(c.nome_fantasia), tax_id: cnpj, municipality_code: municipio,
+    postal_code: txt(String(c.cep ?? "").replace(/\D/g, "")), street: txt(c.logradouro), address_number: txt(c.numero), address_complement: txt(c.complemento),
+    neighborhood: txt(c.bairro), state: txt(c.uf), email: txt(c.email), cnae_fiscal_code: cnae, cnae_fiscal_description: txt(c.cnae_fiscal_descricao),
+    cnaes_secundarios: Array.isArray(c.cnaes_secundarios) ? (c.cnaes_secundarios as { codigo: number; descricao: string }[]).map((i) => ({ code: String(i.codigo).padStart(7, "0"), description: i.descricao })) : [],
+    status: "ACTIVE", emission_blocked: false,
+  }).select("id").single();
+  if (error) return { erro: "não deu para criar a empresa" };
+  if (cnae && atorId) {
+    try {
+      const r = await resolveCnaeActivity(db, cnae);
+      if (r.candidates.length === 1) await createServiceFromNationalCode({ db, organizationId: data.id, nationalServiceCodeId: r.candidates[0].nationalServiceCodeId, createdBy: atorId, actorType: "OFFICE", allowAutoReady: true });
+    } catch { /* o cadastro não depende do serviço */ }
+  }
+  await ensureAutomaticTaxProfile(db, data.id);
+  return data.id;
+}
+
+async function noEmissor(db: SupabaseClient, a: A1Aberto, gravar: boolean, atorId: string | null): Promise<Pick<ResultadoA1, "emissor" | "organizationId" | "empresaNova">> {
+  const cnpj = a.meta.ownerTaxId;
+  if (!cnpj) return { emissor: "e-CPF (o emissor só usa e-CNPJ)" };
+  if (a.vencido) return { emissor: "vencido" };
+  const { data: org } = await db.from("organizations").select("id").eq("tax_id", cnpj).maybeSingle();
+  let orgId = org?.id as string | undefined;
+  if (orgId) {
+    const { data: cert } = await db.from("digital_certificates").select("valid_until").eq("organization_id", orgId).is("replaced_at", null).maybeSingle();
+    if (cert && cert.valid_until >= a.meta.validUntil) return { emissor: "já tinha (igual ou mais novo)", organizationId: orgId };
+  } else {
+    if (!gravar) return { emissor: "empresa nova + certificado" };
+    const r = await criarEmpresa(db, cnpj, atorId);
+    if (typeof r !== "string") return { emissor: `FALHA: ${r.erro}` };
+    orgId = r;
+  }
+  if (!gravar) return { emissor: "certificado novo/renovado", organizationId: orgId };
+  const storagePath = `organizations/${orgId}/certificates/${crypto.randomUUID()}.p12`;
+  const up = await db.storage.from("a1-certificates").upload(storagePath, a.buffer, { contentType: "application/x-pkcs12", upsert: false });
+  if (up.error) return { emissor: "FALHA: armazenamento", organizationId: orgId };
+  const status = classifyCertificate(a.meta);
+  const { data: id, error } = await db.rpc("register_organization_certificate", {
+    p_organization_id: orgId, p_storage_path: storagePath, p_encrypted_password: encryptSecret(Buffer.from(a.senha, "utf8")),
+    p_serial: a.meta.serial, p_subject: a.meta.subject, p_issuer: a.meta.issuer, p_valid_from: a.meta.validFrom, p_valid_until: a.meta.validUntil,
+    p_status: status, p_owner_tax_id: a.meta.ownerTaxId, p_fingerprint_sha256: a.meta.fingerprintSha256,
+  });
+  if (error || !id) { await db.storage.from("a1-certificates").remove([storagePath]); return { emissor: "FALHA: registro", organizationId: orgId }; }
+  await db.from("audit_logs").insert({ organization_id: orgId, actor_user_id: atorId, actor_type: "OFFICE", action: org ? "certificate_replaced" : "certificate_added", entity: "digital_certificate", entity_id: id, safe_metadata: { status, origem: "portal" } });
+  return { emissor: org ? "certificado novo/renovado" : "empresa nova + certificado", organizationId: orgId, empresaNova: !org };
+}
+
+/** Código da empresa na base principal (core.companies, mesmo projeto) quando o chamador não informa. */
+async function codigoDaBase(documento: string) {
+  const { data } = await createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false }, db: { schema: "core" } })
+    .from("companies").select("code").eq("document", documento).not("code", "is", null).limit(1).maybeSingle();
+  return (data?.code as string | undefined) ?? null;
+}
+
+async function noControle(a: A1Aberto, documento: string, codigo: string | null, gravar: boolean): Promise<string> {
+  const controle = clienteDoControle();
+  if (!controle) return "FALHA: controle de certificados não configurado";
+  let { data: emp } = await controle.from("companies").select("id").eq("document", documento).maybeSingle();
+  if (!emp) {
+    const cod = (codigo ?? (await codigoDaBase(documento)))?.replace(/^0+/, "") || null;
+    if (!cod) return "empresa não está no controle e não tem código na base";
+    const { data: mesmoCodigo } = await controle.from("companies").select("id").eq("code", cod).maybeSingle();
+    if (mesmoCodigo) return `código ${cod} já é de outro documento`;
+    if (!gravar) return "empresa nova + vencimento";
+    const ins = await controle.from("companies").insert({ code: cod, document: documento, document_type: documento.length === 14 ? "cnpj" : "cpf", corporate_name: certificateHolderName(a.meta.subject) || documento, origin: "import" }).select("id").single();
+    if (ins.error) return "FALHA: não deu para criar a empresa no controle";
+    emp = ins.data;
+  }
+  const { data: atual } = await controle.from("certificates").select("id,valid_to").eq("company_id", emp!.id).eq("is_current", true).eq("archived", false).order("valid_to", { ascending: false }).limit(1).maybeSingle();
+  const novo = dia(a.meta.validUntil);
+  if (atual && atual.valid_to >= novo) return "já tinha (igual ou mais novo)";
+  if (!gravar) return atual ? `renova ${atual.valid_to} -> ${novo}` : "vencimento novo";
+  if (atual) await controle.from("certificates").update({ is_current: false }).eq("id", atual.id);
+  const ins = await controle.from("certificates").insert({ company_id: emp!.id, type: documento.length === 14 ? "e-cnpj" : "e-cpf", model: "A1", valid_from: dia(a.meta.validFrom), valid_to: novo, origin: "import", notes: "Enviado pelo portal" }).select("id").single();
+  if (ins.error) return "FALHA: não deu para gravar o vencimento";
+  await controle.from("certificate_history").insert({ certificate_id: ins.data.id, company_id: emp!.id, action: atual ? "renewed" : "created", field_changed: "valid_to", old_value: atual?.valid_to ?? null, new_value: novo });
+  return atual ? `renovado ${atual.valid_to} -> ${novo}` : "vencimento novo";
+}
+
+export async function cadastrarA1(a: A1Aberto, opcoes: { gravar: boolean; atorId: string | null; codigo?: string | null }): Promise<ResultadoA1> {
+  const db = createAdminClient();
+  const documento = documentoDoA1(a.meta) ?? "";
+  const falha = (e: unknown) => `FALHA: ${e instanceof Error ? e.message : String(e)}`.slice(0, 160);
+  const emissor = await noEmissor(db, a, opcoes.gravar, opcoes.atorId).catch((e) => ({ emissor: falha(e) }));
+  const controle = documento ? await noControle(a, documento, opcoes.codigo ?? null, opcoes.gravar).catch(falha) : "sem documento no certificado";
+  return { documento, titular: certificateHolderName(a.meta.subject), validade: dia(a.meta.validUntil), controle, ...emissor };
+}

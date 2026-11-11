@@ -33,7 +33,7 @@ export async function listarRecebidas(input: { empresaId: string; busca?: string
   const termo = termoSeguro(input.busca ?? "");
   let query = createAdminClient().from("received_documents").select(CAMPOS, { count: "exact" })
     .eq("organization_id", input.empresaId).eq("environment", getConfiguredNFSeEnvironment()).eq("document_type", "NFSE").in("role", ["TOMADOR", "INTERMEDIARIO"])
-    .order("issued_at", { ascending: false, nullsFirst: false }).order("nsu", { ascending: false })
+    .order("competence", { ascending: false, nullsFirst: false }).order("issued_at", { ascending: false, nullsFirst: false }).order("nsu", { ascending: false })
     .range((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA - 1);
   if (input.de) query = query.gte("issued_at", inicioDoDiaBrasilia(input.de));
   if (input.ate) query = query.lt("issued_at", inicioDoDiaBrasilia(somarDias(input.ate, 1)));

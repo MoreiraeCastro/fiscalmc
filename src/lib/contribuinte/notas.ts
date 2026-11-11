@@ -74,7 +74,7 @@ async function todasAsPaginas<T>(pagina: (de: number, ate: number) => PromiseLik
 
 type Filtro = { empresaId: string; busca?: string; de?: string; ate?: string };
 
-/** As nossas (invoices) e as emitidas fora (ADN, papel PRESTADOR), sem repetir a mesma nota, da mais nova para a mais antiga. */
+/** As nossas (invoices) e as emitidas fora (ADN, papel PRESTADOR), sem repetir a mesma nota, por competência (a mais recente primeiro) e, dentro dela, pela geração. */
 async function todasEmitidas(input: Filtro): Promise<NotaLinha[]> {
   const db = createAdminClient();
   const termo = termoSeguro(input.busca ?? "");
@@ -116,7 +116,7 @@ async function todasEmitidas(input: Filtro): Promise<NotaLinha[]> {
   return [
     ...nossas.map(paraLinha),
     ...externas.filter((item) => !chavesNossas.has(item.access_key)).map(externaParaLinha),
-  ].sort((a, b) => b.geracao.localeCompare(a.geracao));
+  ].sort((a, b) => b.competencia.slice(0, 7).localeCompare(a.competencia.slice(0, 7)) || b.geracao.localeCompare(a.geracao));
 }
 
 /**
@@ -133,5 +133,7 @@ export async function listarEmitidas(input: Filtro & { pagina?: number }) {
 /** Cartão "Últimas NFS-e emitidas nos últimos 30 dias" da Página Principal. */
 export async function ultimasEmitidas(empresaId: string, hoje: string) {
   const todas = await todasEmitidas({ empresaId, de: somarDias(hoje, -30) });
-  return todas.filter((nota) => nota.externa || ["ISSUED", "CANCELLED", "UNKNOWN", "SUBMITTING"].includes(nota.status)).slice(0, 10);
+  // "Últimas" é pela geração, não pela competência.
+  return todas.filter((nota) => nota.externa || ["ISSUED", "CANCELLED", "UNKNOWN", "SUBMITTING"].includes(nota.status))
+    .sort((a, b) => b.geracao.localeCompare(a.geracao)).slice(0, 10);
 }

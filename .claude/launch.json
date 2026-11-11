@@ -4,8 +4,95 @@
     {
       "name": "fiscalmc-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "gerador-contratos",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "../gerador-contratos",
+        "run",
+        "dev"
+      ],
+      "port": 3006,
+      "url": "http://localhost:3006"
+    },
+    {
+      "name": "admissao",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "--app-dir",
+        "../admissao",
+        "main:app",
+        "--port",
+        "8010"
+      ],
+      "port": 8010,
+      "url": "http://localhost:8010"
+    },
+    {
+      "name": "carga-horaria",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "../carga-horaria",
+        "run",
+        "dev"
+      ],
+      "port": 3007,
+      "url": "http://localhost:3007"
+    },
+    {
+      "name": "prototipo-legalizacao",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8770",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "C:/Users/Mc/AppData/Local/Temp/claude/C--Users-Mc-Documents-fiscalmc-latest/b41e9fb1-816f-4545-bd61-91a907ce5c0c/scratchpad/leg"
+      ],
+      "port": 8770,
+      "url": "http://localhost:8770"
+    },
+    {
+      "name": "previa-estatica",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8771",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "C:/Users/Mc/AppData/Local/Temp/claude/C--Users-Mc-Documents-fiscalmc-latest/b41e9fb1-816f-4545-bd61-91a907ce5c0c/scratchpad/prev"
+      ],
+      "port": 8771,
+      "url": "http://localhost:8771"
+    },
+    {
+      "name": "links-bio",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8772",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "C:/Users/Mc/Documents/links-bio"
+      ],
+      "port": 8772,
+      "url": "http://localhost:8772"
     }
   ]
 }

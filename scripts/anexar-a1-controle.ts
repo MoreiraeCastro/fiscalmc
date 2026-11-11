@@ -9,7 +9,7 @@ const GRAVAR = process.argv.includes("--gravar");
 const db = createAdminClient();
 const ctrl = createClient(process.env.CONTROLE_SUPABASE_URL!, process.env.CONTROLE_SUPABASE_SECRET_KEY!, { auth: { persistSession: false } });
 
-const { data: certs } = await db.from("digital_certificates").select("organization_id,storage_path,valid_until,organizations(tax_id)").is("replaced_at", null).limit(5000);
+const { data: certs } = await db.from("digital_certificates").select("organization_id,private_storage_path,valid_until,organizations(tax_id)").is("replaced_at", null).limit(5000);
 const r: Record<string, number> = {};
 const conta = (k: string) => { r[k] = (r[k] ?? 0) + 1; };
 for (const c of certs ?? []) {
@@ -22,7 +22,7 @@ for (const c of certs ?? []) {
   if (atual.attachment_path) { conta("já tinha anexo"); continue; }
   if (atual.valid_to !== String(c.valid_until).slice(0, 10)) { conta("vencimento diferente (não anexa)"); continue; }
   if (!GRAVAR) { conta("anexaria"); continue; }
-  const { data: arquivo, error } = await db.storage.from("a1-certificates").download(c.storage_path);
+  const { data: arquivo, error } = await db.storage.from("a1-certificates").download(c.private_storage_path);
   if (error || !arquivo) { conta("FALHA: leitura do cofre"); continue; }
   const nome = `${emp.code} - A1 ${atual.valid_to}.pfx`;
   const path = `${emp.id}/${atual.id}/${Date.now()}-${nome.replace(/[^a-zA-Z0-9._-]/g, "_")}`;

@@ -20,7 +20,8 @@ for (const c of certs ?? []) {
   const { data: atual } = await ctrl.from("certificates").select("id,valid_to,attachment_path").eq("company_id", emp.id).eq("is_current", true).eq("archived", false).order("valid_to", { ascending: false }).limit(1).maybeSingle();
   if (!atual) { conta("sem certificado atual no controle"); continue; }
   if (atual.attachment_path) { conta("já tinha anexo"); continue; }
-  if (atual.valid_to !== String(c.valid_until).slice(0, 10)) { conta("vencimento diferente (não anexa)"); continue; }
+  // Mesmo certificado: a planilha antiga às vezes anotou o dia seguinte. Diferença maior = o controle conhece outro certificado.
+  if (Math.abs(Date.parse(atual.valid_to) - Date.parse(String(c.valid_until).slice(0, 10))) > 86_400_000) { conta("vencimento diferente (não anexa)"); continue; }
   if (!GRAVAR) { conta("anexaria"); continue; }
   const { data: arquivo, error } = await db.storage.from("a1-certificates").download(c.private_storage_path);
   if (error || !arquivo) { conta("FALHA: leitura do cofre"); continue; }

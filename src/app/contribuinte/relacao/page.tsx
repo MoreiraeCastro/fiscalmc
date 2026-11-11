@@ -1,4 +1,4 @@
-import { FileSpreadsheet } from "@/components/icons";
+import { FileCode, FileSpreadsheet, FileText } from "@/components/icons";
 import { Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { SeletorCompetencia } from "@/components/contribuinte/seletor-competencia";
 import { apiUrl } from "@/lib/base-path";
@@ -13,7 +13,7 @@ function competencias() {
   return { atual: hoje.slice(0, 7), anterior: mes === 1 ? `${ano - 1}-12` : `${ano}-${String(mes - 1).padStart(2, "0")}` };
 }
 
-/** Relação em planilha das NFS-e de uma competência (1 ao último dia do mês), emitidas ou recebidas. */
+/** Relação em planilha das NFS-e de uma competência (1 ao último dia do mês), emitidas ou recebidas, e os XML / DANFS-e das notas num .zip. */
 export default async function RelacaoPage() {
   const { empresa } = await exigirEmpresa();
   const { atual, anterior } = competencias();
@@ -31,6 +31,8 @@ export default async function RelacaoPage() {
         <div className="pc-relacao-botoes">
           <button className="pc-botao secundario" type="submit" name="modelo" value="simples"><FileSpreadsheet size={16} aria-hidden />Relação simples</button>
           <button className="pc-botao" type="submit" name="modelo" value="completa"><FileSpreadsheet size={16} aria-hidden />Relação completa</button>
+          <button className="pc-botao secundario" type="submit" name="modelo" value="xml"><FileCode size={16} aria-hidden />XML das notas</button>
+          <button className="pc-botao secundario" type="submit" name="modelo" value="pdf"><FileText size={16} aria-hidden />PDF das notas</button>
         </div>
       </form>
       <p className="pc-meta">{empresa.razaoSocial}</p>

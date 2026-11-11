@@ -23,6 +23,9 @@ importers:
       fast-xml-parser:
         specifier: 5.11.0
         version: 5.11.0
+      jszip:
+        specifier: 3.10.2
+        version: 3.10.2
       libxml2-wasm:
         specifier: 0.7.1
         version: 0.7.1

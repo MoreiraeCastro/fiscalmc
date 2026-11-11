@@ -1,11 +1,14 @@
 import "server-only";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import { XMLParser } from "fast-xml-parser";
 import municipios from "@/lib/nfse/data/municipios-ibge.json";
 import { downloadAuthorizedFiscalArtifact } from "@/lib/nfse/artifacts/download";
 import { getConfiguredNFSeEnvironment } from "@/lib/nfse/environments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatarDocumento } from "./formato";
+import { montarDanfse } from "@/lib/nfse/danfse/modelo";
+import { gerarDanfsePdf } from "@/lib/nfse/danfse/pdf";
 
 /**
  * Relação de NFS-e de uma competência (dia 1 ao último dia do mês), no mesmo leiaute da extensão que o escritório
@@ -14,6 +17,7 @@ import { formatarDocumento } from "./formato";
  */
 export type TipoRelacao = "emitidas" | "recebidas";
 export type ModeloRelacao = "simples" | "completa";
+export type FormatoArquivos = "xml" | "pdf";
 
 type No = Record<string, unknown>;
 const tabelaMunicipios = municipios as unknown as Record<string, [string, string]>;
@@ -305,4 +309,43 @@ export async function gerarRelacao(input: { empresaId: string; razaoSocial: stri
   const carimbo = `${parte("day")}${parte("month")}${parte("year")}-${parte("hour")}${parte("minute")}${parte("second")}`;
   const nome = `${input.razaoSocial.replace(/[\\/:*?"<>|]+/g, " ").trim()} - ${input.tipo === "emitidas" ? "Emitidas" : "Recebidas"} - ${input.modelo === "completa" ? "Completa" : "Simples"} - ${dia(de)} a ${dia(ate)} - ${carimbo}.xlsx`;
   return { arquivo: new Uint8Array(await livro.xlsx.writeBuffer()), nome, quantidade: linhas.length };
+}
+
+function carimboAgora(agora: Date) {
+  const local = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(agora);
+  const parte = (tipo: string) => local.find((p) => p.type === tipo)?.value ?? "";
+  return `${parte("day")}${parte("month")}${parte("year")}-${parte("hour")}${parte("minute")}${parte("second")}`;
+}
+
+const nomeSeguro = (texto: string) => texto.replace(/[\\/:*?"<>|\x00-\x1f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+
+/**
+ * Os arquivos das NFS-e da competência num .zip: o XML oficial de cada nota ou o DANFS-e (montado do XML, no leiaute
+ * nacional, com a marca de cancelada/substituída). Um arquivo por nota: "<Emitida|Recebida> - <número> - <contraparte>".
+ */
+export async function gerarArquivosNotas(input: { empresaId: string; razaoSocial: string; tipo: TipoRelacao; formato: FormatoArquivos; competencia: string; agora?: Date }) {
+  const { de, ate } = intervaloDaCompetencia(input.competencia);
+  const notas = await notasDaCompetencia(input.empresaId, input.tipo, de, ate);
+  const zip = new JSZip();
+  const usados = new Set<string>();
+  let quantidade = 0;
+  for (const nota of notas) {
+    const linha = linhaCompleta(nota.xml, nota.eventos);
+    const numero = String(linha?.valores["Número NFS-e"] ?? nota.chave.slice(-15));
+    const contraparte = String((input.tipo === "emitidas" ? linha?.valores["Nome Tomador"] : linha?.valores["Nome Prestador"]) ?? "");
+    let base = nomeSeguro(`${input.tipo === "emitidas" ? "Emitida" : "Recebida"} - ${numero}${contraparte ? ` - ${contraparte}` : ""}`);
+    if (usados.has(base)) base = `${base} - ${nota.chave.slice(-8)}`;
+    usados.add(base);
+    if (input.formato === "xml") {
+      zip.file(`${base}.xml`, nota.xml);
+    } else {
+      const modelo = montarDanfse(nota.xml, { cancelada: linha?.situacao === "Cancelada", substituida: linha?.situacao === "Substituída" });
+      if (!modelo) continue;
+      zip.file(`${base}.pdf`, await gerarDanfsePdf(modelo));
+    }
+    quantidade++;
+  }
+  const dia = (iso: string) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
+  const nome = `${input.razaoSocial.replace(/[\\/:*?"<>|]+/g, " ").trim()} - ${input.tipo === "emitidas" ? "Emitidas" : "Recebidas"} - ${input.formato.toUpperCase()} - ${dia(de)} a ${dia(ate)} - ${carimboAgora(input.agora ?? new Date())}.zip`;
+  return { arquivo: await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" }), nome, quantidade };
 }

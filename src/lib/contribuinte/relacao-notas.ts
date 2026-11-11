@@ -317,7 +317,7 @@ function carimboAgora(agora: Date) {
   return `${parte("day")}${parte("month")}${parte("year")}-${parte("hour")}${parte("minute")}${parte("second")}`;
 }
 
-const nomeSeguro = (texto: string) => texto.replace(/[\\/:*?"<>|\x00-\x1f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+const nomeSeguro = (texto: string) => texto.replace(/[\\/:*?"<>|\x00-\x1f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80).replace(/[.\s]+$/, "");
 
 /**
  * Os arquivos das NFS-e da competência num .zip: o XML oficial de cada nota ou o DANFS-e (montado do XML, no leiaute

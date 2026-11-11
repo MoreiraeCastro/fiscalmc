@@ -71,7 +71,9 @@ a.pc-empresa:hover { background: var(--surface-2); }
 .pc-menu-lista > a:hover { background: var(--surface); }
 .pc-menu-lista .desativado { color: #9aa6b4; cursor: not-allowed; }
 .pc-menu-lista small { margin-left: auto; font-size: 11px; }
-.pc-filtros { display: grid; grid-template-columns: minmax(220px, 1fr) 170px 170px auto; gap: 10px; align-items: end; }
+.pc-filtros { display: grid; grid-template-columns: minmax(220px, 1fr) 170px 170px auto auto; gap: 10px; align-items: end; }
+.pc-filtro-competencia { display: grid; gap: 4px; font-size: 12.5px; font-weight: 650; color: var(--navy-2); }
+.pc-filtro-competencia .pc-competencia-nome { min-width: 150px; }
 .pc-filtros label { display: grid; gap: 4px; font-size: 12.5px; font-weight: 650; color: var(--navy-2); }
 .pc-filtros input, .pc-busca input { min-height: 38px; padding: 0 11px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--ink); font-size: 14px; }
 .pc-filtros input:focus, .pc-busca input:focus { outline: 0; border-color: var(--navy-3); box-shadow: 0 0 0 3px rgba(24,75,115,.12); }

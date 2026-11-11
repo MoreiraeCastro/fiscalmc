@@ -3,6 +3,7 @@ import { Aviso, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { MenuNota } from "@/components/contribuinte/menu-nota";
 import { BotaoAtualizarRecebidas } from "@/components/contribuinte/botao-atualizar-recebidas";
 import { apiUrl } from "@/lib/base-path";
+import { SeletorCompetencia } from "@/components/contribuinte/seletor-competencia";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
 import { listarRecebidas, situacaoLeitura } from "@/lib/contribuinte/recebidas";
 import { POR_PAGINA } from "@/lib/contribuinte/notas";
@@ -14,21 +15,24 @@ export const metadata = { title: "NFS-e Recebidas" };
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
 /** NFS-e Recebidas, como /Notas/Recebidas do Emissor Nacional, mas sem o limite de 30 dias (vem da distribuição do ADN). */
-export default async function RecebidasPage({ searchParams }: { searchParams: Promise<{ q?: string; de?: string; ate?: string; p?: string }> }) {
+export default async function RecebidasPage({ searchParams }: { searchParams: Promise<{ q?: string; de?: string; ate?: string; competencia?: string; p?: string }> }) {
   const [{ empresa }, filtros] = await Promise.all([exigirEmpresa(), searchParams]);
   const de = filtros.de && DATA.test(filtros.de) ? filtros.de : undefined;
   const ate = filtros.ate && DATA.test(filtros.ate) ? filtros.ate : undefined;
+  const competencia = filtros.competencia && /^\d{4}-(0[1-9]|1[0-2])$/.test(filtros.competencia) ? filtros.competencia : undefined;
+  const mesAtual = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()).slice(0, 7);
   const [{ linhas, total, pagina }, leitura] = await Promise.all([
-    listarRecebidas({ empresaId: empresa.id, busca: filtros.q, de, ate, pagina: Number(filtros.p) || 1 }),
+    listarRecebidas({ empresaId: empresa.id, busca: filtros.q, de, ate, competencia, pagina: Number(filtros.p) || 1 }),
     situacaoLeitura(empresa.id),
   ]);
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
-  const filtrando = Boolean(filtros.q?.trim() || de || ate);
+  const filtrando = Boolean(filtros.q?.trim() || de || ate || competencia);
   const link = (p: number) => {
     const params = new URLSearchParams();
     if (filtros.q) params.set("q", filtros.q);
     if (de) params.set("de", de);
     if (ate) params.set("ate", ate);
+    if (competencia) params.set("competencia", competencia);
     if (p > 1) params.set("p", String(p));
     const texto = params.toString();
     return `/contribuinte/notas/recebidas${texto ? `?${texto}` : ""}`;
@@ -44,6 +48,7 @@ export default async function RecebidasPage({ searchParams }: { searchParams: Pr
         <label className="largo"><span>Pesquisar pessoa física ou jurídica</span><input name="q" defaultValue={filtros.q} placeholder="Nome, CPF ou CNPJ do prestador" /></label>
         <label><span>Data Inicial</span><input type="date" name="de" defaultValue={de} /></label>
         <label><span>Data Final</span><input type="date" name="ate" defaultValue={ate} /></label>
+        <div className="pc-filtro-competencia"><span>Competência</span><SeletorCompetencia name="competencia" inicial={competencia ?? ""} limite={mesAtual} opcional /></div>
         <div className="pc-filtros-botoes"><button className="pc-botao" type="submit">Filtrar</button>{filtrando ? <Link className="pc-link" href="/contribuinte/notas/recebidas">Limpar</Link> : null}</div>
       </form>
       {!leitura?.last_sync_at

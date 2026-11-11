@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "@/components/icons";
+import { ChevronLeft, ChevronRight, X } from "@/components/icons";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -17,13 +17,14 @@ function somar(valor: string, meses: number) {
 /**
  * Competência "AAAA-MM" no lugar do <input type="month"> do navegador: setas para andar um mês e, no nome,
  * a grade dos 12 meses do ano. Não passa do mês atual (`limite`). O valor vai no form pelo campo escondido.
+ * `opcional`: começa vazio ("Todas") e ganha o × para voltar a todas (filtro das listas de notas).
  */
-export function SeletorCompetencia({ name, inicial, limite }: { name: string; inicial: string; limite: string }) {
+export function SeletorCompetencia({ name, inicial, limite, opcional }: { name: string; inicial: string; limite: string; opcional?: boolean }) {
   const [valor, setValor] = useState(inicial);
   const [aberto, setAberto] = useState(false);
-  const [anoGrade, setAnoGrade] = useState(partes(inicial).ano);
+  const [anoGrade, setAnoGrade] = useState(partes(inicial || limite).ano);
   const raiz = useRef<HTMLDivElement>(null);
-  const { ano, mes } = partes(valor);
+  const { ano, mes } = partes(valor || limite);
   const anoLimite = partes(limite).ano;
 
   useEffect(() => {
@@ -39,12 +40,13 @@ export function SeletorCompetencia({ name, inicial, limite }: { name: string; in
 
   return <div className="pc-competencia" ref={raiz}>
     <input type="hidden" name={name} value={valor} />
-    <button type="button" className="pc-competencia-seta" aria-label="Mês anterior" onClick={() => escolher(somar(valor, -1))}><ChevronLeft size={16} aria-hidden /></button>
+    <button type="button" className="pc-competencia-seta" aria-label="Mês anterior" onClick={() => escolher(somar(valor || somar(limite, 1), -1))}><ChevronLeft size={16} aria-hidden /></button>
     <button type="button" className="pc-competencia-nome" aria-haspopup="dialog" aria-expanded={aberto}
       onClick={() => { setAnoGrade(ano); setAberto((v) => !v); }}>
-      {MESES[mes - 1]} de {ano}
+      {valor ? `${MESES[mes - 1]} de ${ano}` : "Todas"}
     </button>
-    <button type="button" className="pc-competencia-seta" aria-label="Próximo mês" disabled={valor >= limite} onClick={() => escolher(somar(valor, 1))}><ChevronRight size={16} aria-hidden /></button>
+    <button type="button" className="pc-competencia-seta" aria-label="Próximo mês" disabled={!valor || valor >= limite} onClick={() => escolher(somar(valor, 1))}><ChevronRight size={16} aria-hidden /></button>
+    {opcional && valor ? <button type="button" className="pc-competencia-seta" aria-label="Todas as competências" title="Todas" onClick={() => { setValor(""); setAberto(false); }}><X size={15} aria-hidden /></button> : null}
 
     {aberto ? <div className="pc-competencia-grade" role="dialog" aria-label="Escolher competência">
       <div className="pc-competencia-ano">

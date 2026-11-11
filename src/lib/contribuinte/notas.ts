@@ -72,7 +72,14 @@ async function todasAsPaginas<T>(pagina: (de: number, ate: number) => PromiseLik
   }
 }
 
-type Filtro = { empresaId: string; busca?: string; de?: string; ate?: string };
+type Filtro = { empresaId: string; busca?: string; de?: string; ate?: string; competencia?: string };
+
+/** "AAAA-MM" → [primeiro dia do mês, primeiro dia do mês seguinte) para filtrar colunas de data. */
+export function intervaloCompetencia(competencia: string): [string, string] {
+  const [ano, mes] = competencia.split("-").map(Number);
+  const seguinte = mes === 12 ? `${ano + 1}-01` : `${ano}-${String(mes + 1).padStart(2, "0")}`;
+  return [`${competencia}-01`, `${seguinte}-01`];
+}
 
 /** As nossas (invoices) e as emitidas fora (ADN, papel PRESTADOR), sem repetir a mesma nota, por competência (a mais recente primeiro) e, dentro dela, pela geração. */
 async function todasEmitidas(input: Filtro): Promise<NotaLinha[]> {
@@ -87,6 +94,7 @@ async function todasEmitidas(input: Filtro): Promise<NotaLinha[]> {
       .range(de, ate);
     if (input.de) query = query.gte("created_at", inicioDoDiaBrasilia(input.de));
     if (input.ate) query = query.lt("created_at", inicioDoDiaBrasilia(somarDias(input.ate, 1)));
+    if (input.competencia) { const [inicio, fim] = intervaloCompetencia(input.competencia); query = query.gte("service_date", inicio).lt("service_date", fim); }
     if (termo) {
       const filtros = [`legal_name.ilike.*${termo}*`];
       if (digitos.length >= 3) filtros.push(`tax_id.ilike.*${digitos}*`);
@@ -106,6 +114,7 @@ async function todasEmitidas(input: Filtro): Promise<NotaLinha[]> {
       .range(de, ate);
     if (input.de) query = query.gte("issued_at", inicioDoDiaBrasilia(input.de));
     if (input.ate) query = query.lt("issued_at", inicioDoDiaBrasilia(somarDias(input.ate, 1)));
+    if (input.competencia) { const [inicio, fim] = intervaloCompetencia(input.competencia); query = query.gte("competence", inicio).lt("competence", fim); }
     if (termo) {
       const filtros = [`customer_name.ilike.*${termo}*`];
       if (digitos.length >= 3) filtros.push(`customer_tax_id.ilike.*${digitos}*`);

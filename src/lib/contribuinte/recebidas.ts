@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getConfiguredNFSeEnvironment } from "@/lib/nfse/environments";
 import { inicioDoDiaBrasilia, somarDias } from "./formato";
-import { POR_PAGINA } from "./notas";
+import { POR_PAGINA, intervaloCompetencia } from "./notas";
 
 export type RecebidaLinha = {
   id: string;
@@ -28,7 +28,7 @@ type Bruta = { id: string; nfse_number: string | null; issued_at: string | null;
  * NFS-e Recebidas: as que a empresa tomou (ou intermediou), lidas da distribuição do ADN.
  * Como as Emitidas, sem o limite de 30 dias do portal nacional: sem filtro, mostra tudo, da mais nova para a mais antiga.
  */
-export async function listarRecebidas(input: { empresaId: string; busca?: string; de?: string; ate?: string; pagina?: number }) {
+export async function listarRecebidas(input: { empresaId: string; busca?: string; de?: string; ate?: string; competencia?: string; pagina?: number }) {
   const pagina = Math.max(1, input.pagina ?? 1);
   const termo = termoSeguro(input.busca ?? "");
   let query = createAdminClient().from("received_documents").select(CAMPOS, { count: "exact" })
@@ -37,6 +37,7 @@ export async function listarRecebidas(input: { empresaId: string; busca?: string
     .range((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA - 1);
   if (input.de) query = query.gte("issued_at", inicioDoDiaBrasilia(input.de));
   if (input.ate) query = query.lt("issued_at", inicioDoDiaBrasilia(somarDias(input.ate, 1)));
+  if (input.competencia) { const [inicio, fim] = intervaloCompetencia(input.competencia); query = query.gte("competence", inicio).lt("competence", fim); }
   if (termo) {
     const digitos = termo.replace(/\D/g, "");
     const filtros = [`issuer_name.ilike.*${termo}*`];

@@ -117,28 +117,46 @@ async function codigoDaBase(documento: string) {
   return (data?.code as string | undefined) ?? null;
 }
 
+const codigoDoControle = (emp: { code?: string | null } | null) => emp?.code ?? "";
+
+/** Arquivo do A1 como anexo do certificado no controle (bucket privado certificado-anexos). Sem a senha. Falha aqui não desfaz o cadastro. */
+async function anexarNoControle(controle: SupabaseClient, companyId: string, certificateId: string, codigo: string, buffer: Buffer, validade: string) {
+  try {
+    const nome = `${codigo ? `${codigo} - ` : ""}A1 ${validade}.pfx`;
+    const path = `${companyId}/${certificateId}/${Date.now()}-${nome.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    const up = await controle.storage.from("certificado-anexos").upload(path, buffer, { contentType: "application/x-pkcs12" });
+    if (up.error) return;
+    await controle.from("certificates").update({ attachment_path: path, attachment_name: nome, attachment_size: buffer.length, attachment_uploaded_at: new Date().toISOString() }).eq("id", certificateId);
+  } catch { /* o anexo é complemento */ }
+}
+
 async function noControle(a: A1Aberto, documento: string, codigo: string | null, gravar: boolean): Promise<string> {
   const controle = clienteDoControle();
   if (!controle) return "FALHA: controle de certificados não configurado";
-  let { data: emp } = await controle.from("companies").select("id").eq("document", documento).maybeSingle();
+  let { data: emp } = await controle.from("companies").select("id,code").eq("document", documento).maybeSingle();
   if (!emp) {
     const cod = (codigo ?? (await codigoDaBase(documento)))?.replace(/^0+/, "") || null;
     if (!cod) return "empresa não está no controle e não tem código na base";
     const { data: mesmoCodigo } = await controle.from("companies").select("id").eq("code", cod).maybeSingle();
     if (mesmoCodigo) return `código ${cod} já é de outro documento`;
     if (!gravar) return "empresa nova + vencimento";
-    const ins = await controle.from("companies").insert({ code: cod, document: documento, document_type: documento.length === 14 ? "cnpj" : "cpf", corporate_name: certificateHolderName(a.meta.subject) || documento, origin: "import" }).select("id").single();
+    const ins = await controle.from("companies").insert({ code: cod, document: documento, document_type: documento.length === 14 ? "cnpj" : "cpf", corporate_name: certificateHolderName(a.meta.subject) || documento, origin: "import" }).select("id,code").single();
     if (ins.error) return "FALHA: não deu para criar a empresa no controle";
     emp = ins.data;
   }
-  const { data: atual } = await controle.from("certificates").select("id,valid_to").eq("company_id", emp!.id).eq("is_current", true).eq("archived", false).order("valid_to", { ascending: false }).limit(1).maybeSingle();
+  const { data: atual } = await controle.from("certificates").select("id,valid_to,attachment_path").eq("company_id", emp!.id).eq("is_current", true).eq("archived", false).order("valid_to", { ascending: false }).limit(1).maybeSingle();
   const novo = dia(a.meta.validUntil);
-  if (atual && atual.valid_to >= novo) return "já tinha (igual ou mais novo)";
+  if (atual && atual.valid_to > novo) return "já tinha (mais novo)";
+  if (atual && atual.valid_to === novo) {
+    if (!atual.attachment_path && gravar) await anexarNoControle(controle, emp!.id, atual.id, codigoDoControle(emp), a.buffer, novo);
+    return "já tinha (igual)";
+  }
   if (!gravar) return atual ? `renova ${atual.valid_to} -> ${novo}` : "vencimento novo";
   if (atual) await controle.from("certificates").update({ is_current: false }).eq("id", atual.id);
   const ins = await controle.from("certificates").insert({ company_id: emp!.id, type: documento.length === 14 ? "e-cnpj" : "e-cpf", model: "A1", valid_from: dia(a.meta.validFrom), valid_to: novo, origin: "import", notes: "Enviado pelo portal" }).select("id").single();
   if (ins.error) return "FALHA: não deu para gravar o vencimento";
   await controle.from("certificate_history").insert({ certificate_id: ins.data.id, company_id: emp!.id, action: atual ? "renewed" : "created", field_changed: "valid_to", old_value: atual?.valid_to ?? null, new_value: novo });
+  await anexarNoControle(controle, emp!.id, ins.data.id, codigoDoControle(emp), a.buffer, novo);
   return atual ? `renovado ${atual.valid_to} -> ${novo}` : "vencimento novo";
 }
 

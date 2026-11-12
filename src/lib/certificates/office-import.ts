@@ -8,6 +8,7 @@ import { certificateHolderName } from "@/lib/nfse/certificate/presentation";
 import { ensureAutomaticTaxProfile } from "@/lib/organizations/automatic-tax-profile";
 import { resolveCnaeActivity } from "@/lib/organizations/cnae-activity-resolver";
 import { createServiceFromNationalCode } from "@/lib/services/catalog-linking";
+import { logEvent } from "@/lib/observability/logger";
 
 /**
  * Cadastro de A1 pelo escritório (tela "Subir certificado" do portal e importação em lote):
@@ -18,7 +19,11 @@ import { createServiceFromNationalCode } from "@/lib/services/catalog-linking";
 export type A1Aberto = { buffer: Buffer; senha: string; meta: CertificateMetadata; vencido: boolean };
 export type ResultadoA1 = { documento: string; titular: string; validade: string; emissor: string; controle: string; organizationId?: string; empresaNova?: boolean };
 
-const dia = (iso: string) => iso.slice(0, 10);
+// Dia civil em Brasília (AAAA-MM-DD): um A1 que vence depois das 21h cai no dia seguinte em UTC.
+const fusoBrasilia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
+export const dia = (iso: string) => fusoBrasilia.format(new Date(iso));
+/** Mesmo vencimento no controle com folga de um dia (a planilha antiga às vezes anotou o dia seguinte; o controle já tem dias gravados em UTC). */
+export const mesmoDia = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) <= 86_400_000;
 const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Tenta as senhas na ordem. null = nenhuma abriu; "ILEGIVEL" = abriu mas não é um A1 legível. */
@@ -87,8 +92,9 @@ async function noEmissor(db: SupabaseClient, a: A1Aberto, gravar: boolean, atorI
   const { data: org } = await db.from("organizations").select("id").eq("tax_id", cnpj).maybeSingle();
   let orgId = org?.id as string | undefined;
   if (orgId) {
-    const { data: cert } = await db.from("digital_certificates").select("valid_until").eq("organization_id", orgId).is("replaced_at", null).maybeSingle();
-    if (cert && cert.valid_until >= a.meta.validUntil) return { emissor: "já tinha (igual ou mais novo)", organizationId: orgId };
+    const { data: cert } = await db.from("digital_certificates").select("valid_until,fingerprint_sha256").eq("organization_id", orgId).is("replaced_at", null).maybeSingle();
+    // O banco devolve "+00:00" e o arquivo ".000Z": compara como data, e o mesmo arquivo (fingerprint) nunca conta como renovação.
+    if (cert && (cert.fingerprint_sha256 === a.meta.fingerprintSha256 || Date.parse(cert.valid_until) >= Date.parse(a.meta.validUntil))) return { emissor: "já tinha (igual ou mais novo)", organizationId: orgId };
   } else {
     if (!gravar) return { emissor: "empresa nova + certificado" };
     const r = await criarEmpresa(db, cnpj, atorId);
@@ -146,15 +152,16 @@ async function noControle(a: A1Aberto, documento: string, codigo: string | null,
   }
   const { data: atual } = await controle.from("certificates").select("id,valid_to,attachment_path").eq("company_id", emp!.id).eq("is_current", true).eq("archived", false).order("valid_to", { ascending: false }).limit(1).maybeSingle();
   const novo = dia(a.meta.validUntil);
-  if (atual && atual.valid_to > novo) return "já tinha (mais novo)";
-  if (atual && atual.valid_to === novo) {
-    if (!atual.attachment_path && gravar) await anexarNoControle(controle, emp!.id, atual.id, codigoDoControle(emp), a.buffer, novo);
+  if (atual && mesmoDia(atual.valid_to, novo)) {
+    if (!atual.attachment_path && gravar) await anexarNoControle(controle, emp!.id, atual.id, codigoDoControle(emp), a.buffer, atual.valid_to);
     return "já tinha (igual)";
   }
+  if (atual && atual.valid_to > novo) return "já tinha (mais novo)";
   if (!gravar) return atual ? `renova ${atual.valid_to} -> ${novo}` : "vencimento novo";
-  if (atual) await controle.from("certificates").update({ is_current: false }).eq("id", atual.id);
+  // Grava o novo antes de tirar o atual: se a gravação falhar, a empresa continua com o certificado de antes.
   const ins = await controle.from("certificates").insert({ company_id: emp!.id, type: documento.length === 14 ? "e-cnpj" : "e-cpf", model: "A1", valid_from: dia(a.meta.validFrom), valid_to: novo, origin: "import", notes: "Enviado pelo portal" }).select("id").single();
   if (ins.error) return "FALHA: não deu para gravar o vencimento";
+  if (atual) await controle.from("certificates").update({ is_current: false }).eq("id", atual.id).neq("id", ins.data.id);
   await controle.from("certificate_history").insert({ certificate_id: ins.data.id, company_id: emp!.id, action: atual ? "renewed" : "created", field_changed: "valid_to", old_value: atual?.valid_to ?? null, new_value: novo });
   await anexarNoControle(controle, emp!.id, ins.data.id, codigoDoControle(emp), a.buffer, novo);
   return atual ? `renovado ${atual.valid_to} -> ${novo}` : "vencimento novo";
@@ -163,8 +170,12 @@ async function noControle(a: A1Aberto, documento: string, codigo: string | null,
 export async function cadastrarA1(a: A1Aberto, opcoes: { gravar: boolean; atorId: string | null; codigo?: string | null }): Promise<ResultadoA1> {
   const db = createAdminClient();
   const documento = documentoDoA1(a.meta) ?? "";
-  const falha = (e: unknown) => `FALHA: ${e instanceof Error ? e.message : String(e)}`.slice(0, 160);
-  const emissor = await noEmissor(db, a, opcoes.gravar, opcoes.atorId).catch((e) => ({ emissor: falha(e) }));
-  const controle = documento ? await noControle(a, documento, opcoes.codigo ?? null, opcoes.gravar).catch(falha) : "sem documento no certificado";
+  // O detalhe do erro fica só no log do servidor (sem senha nem arquivo); para quem chamou, mensagem genérica.
+  const falha = (etapa: "emissor" | "controle") => (e: unknown) => {
+    logEvent("error", "OFFICE_CERTIFICATE_IMPORT_FAILED", { etapa, error: e instanceof Error ? e.name : "unknown", detalhe: e instanceof Error ? e.message.slice(0, 200) : undefined });
+    return "FALHA: erro inesperado (detalhe no log do servidor)";
+  };
+  const emissor = await noEmissor(db, a, opcoes.gravar, opcoes.atorId).catch((e) => ({ emissor: falha("emissor")(e) }));
+  const controle = documento ? await noControle(a, documento, opcoes.codigo ?? null, opcoes.gravar).catch(falha("controle")) : "sem documento no certificado";
   return { documento, titular: certificateHolderName(a.meta.subject), validade: dia(a.meta.validUntil), controle, ...emissor };
 }

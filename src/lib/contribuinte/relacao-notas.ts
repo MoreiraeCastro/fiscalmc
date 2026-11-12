@@ -317,6 +317,16 @@ function carimboAgora(agora: Date) {
   return `${parte("day")}${parte("month")}${parte("year")}-${parte("hour")}${parte("minute")}${parte("second")}`;
 }
 
+/** Teto do .zip de XML/PDF: tudo é montado em memória, então uma competência enorme derrubaria o servidor. */
+export const LIMITE_ARQUIVOS_NOTAS = 1500;
+
+export class RelacaoGrandeDemais extends Error {
+  constructor(public readonly quantidade: number) {
+    super(`A competência tem ${quantidade} notas e o .zip de XML/PDF vai até ${LIMITE_ARQUIVOS_NOTAS}. Baixe a relação em Excel ou fale com o escritório para receber os arquivos desta competência.`);
+    this.name = "RelacaoGrandeDemais";
+  }
+}
+
 const nomeSeguro = (texto: string) => texto.replace(/[\\/:*?"<>|\x00-\x1f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80).replace(/[.\s]+$/, "");
 
 /**
@@ -325,7 +335,13 @@ const nomeSeguro = (texto: string) => texto.replace(/[\\/:*?"<>|\x00-\x1f]+/g, "
  */
 export async function gerarArquivosNotas(input: { empresaId: string; razaoSocial: string; tipo: TipoRelacao; formato: FormatoArquivos; competencia: string; agora?: Date }) {
   const { de, ate } = intervaloDaCompetencia(input.competencia);
+  // Conta antes de baixar os XML (as notas do ADN são quase todas); confere de novo com as nossas que o ADN ainda não devolveu.
+  const { count } = await createAdminClient().from("received_documents").select("access_key", { count: "exact", head: true })
+    .eq("organization_id", input.empresaId).eq("environment", getConfiguredNFSeEnvironment()).eq("document_type", "NFSE")
+    .in("role", input.tipo === "emitidas" ? ["PRESTADOR"] : ["TOMADOR", "INTERMEDIARIO"]).gte("competence", de).lte("competence", ate);
+  if ((count ?? 0) > LIMITE_ARQUIVOS_NOTAS) throw new RelacaoGrandeDemais(count!);
   const notas = await notasDaCompetencia(input.empresaId, input.tipo, de, ate);
+  if (notas.length > LIMITE_ARQUIVOS_NOTAS) throw new RelacaoGrandeDemais(notas.length);
   const zip = new JSZip();
   const usados = new Set<string>();
   let quantidade = 0;

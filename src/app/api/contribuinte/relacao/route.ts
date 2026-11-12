@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
-import { gerarArquivosNotas, gerarRelacao } from "@/lib/contribuinte/relacao-notas";
+import { gerarArquivosNotas, gerarRelacao, RelacaoGrandeDemais } from "@/lib/contribuinte/relacao-notas";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logEvent } from "@/lib/observability/logger";
 import { enfileirarRelacao } from "@/lib/contribuinte/relacao-sharepoint";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// O .zip de PDF monta um DANFS-e por nota (até LIMITE_ARQUIVOS_NOTAS).
+export const maxDuration = 300;
 
 /** Relação de NFS-e da empresa escolhida, por competência: ?tipo=emitidas|recebidas&modelo=simples|completa|xml|pdf&competencia=AAAA-MM (xml e pdf saem num .zip, um arquivo por nota). */
 export async function GET(request: Request) {
@@ -19,14 +21,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Escolha o tipo, a competência e o modelo." }, { status: 400 });
   }
   const arquivos = modelo === "xml" || modelo === "pdf";
-  const { arquivo, nome, quantidade } = arquivos
-    ? await gerarArquivosNotas({ empresaId: empresa.id, razaoSocial: empresa.razaoSocial, tipo, formato: modelo, competencia })
-    : await gerarRelacao({ empresaId: empresa.id, razaoSocial: empresa.razaoSocial, tipo, modelo, competencia });
+  let gerado: { arquivo: Uint8Array; nome: string; quantidade: number };
+  try {
+    gerado = arquivos
+      ? await gerarArquivosNotas({ empresaId: empresa.id, razaoSocial: empresa.razaoSocial, tipo, formato: modelo, competencia })
+      : await gerarRelacao({ empresaId: empresa.id, razaoSocial: empresa.razaoSocial, tipo, modelo, competencia });
+  } catch (error) {
+    if (error instanceof RelacaoGrandeDemais) return NextResponse.json({ error: error.message }, { status: 413 });
+    throw error;
+  }
+  const { arquivo, nome, quantidade } = gerado;
   await createAdminClient().from("audit_logs").insert({ organization_id: empresa.id, actor_user_id: usuarioId, actor_type: escritorio ? "OFFICE" : "CLIENT", action: "nfse_report_downloaded", entity: "organization", entity_id: empresa.id, safe_metadata: { tipo, modelo, competencia, quantidade } });
   logEvent("info", "NFSE_REPORT", { organizationId: empresa.id, tipo, modelo, competencia, quantidade });
   await enfileirarRelacao({ cnpj: empresa.cnpj, razaoSocial: empresa.razaoSocial, competencia, nome, formato: arquivos ? modelo : "excel", arquivo });
   const ascii = nome.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\x20-\x7e]/g, "_");
-  return new NextResponse(new Uint8Array(arquivo), {
+  // Sem cópia: o arquivo já é um Uint8Array só desta resposta.
+  return new NextResponse(arquivo as Uint8Array<ArrayBuffer>, {
     headers: {
       "Content-Type": arquivos ? "application/zip" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${ascii.replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(nome)}`,

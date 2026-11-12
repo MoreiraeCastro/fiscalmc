@@ -3,9 +3,9 @@
 //   Simulação: bash scripts/importar-a1.sh /home/ubuntu/importar-a1/arquivos
 //   Gravar:    bash scripts/importar-a1.sh /home/ubuntu/importar-a1/arquivos --gravar
 // Arquivos nomeados "<código>__<n>.pfx": a senha é prefixo+código; se não abrir, a senha alternativa.
+// Autoria no histórico: --ator=<uuid do usuário> (ou IMPORTAR_A1_ATOR_ID). Sem isso fica sem usuário (e a empresa nova não ganha serviço automático).
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { abrirA1, cadastrarA1, documentoDoA1, type A1Aberto, type ResultadoA1 } from "@/lib/certificates/office-import";
 
 // O controle de certificados mora em outro projeto; fora do .env do emissor, lê as chaves do próprio sistema.
@@ -41,8 +41,9 @@ for (const l of lidos) {
   if (!atual || l.meta.validUntil > atual.meta.validUntil) melhor.set(k, l);
 }
 
-const { data: ultimo } = await createAdminClient().from("audit_logs").select("actor_user_id").eq("actor_type", "OFFICE").not("actor_user_id", "is", null).order("created_at", { ascending: false }).limit(1);
-const atorId = (ultimo?.[0]?.actor_user_id as string | undefined) ?? null;
+// Quem roda o lote se identifica; nunca atribui ao último usuário do escritório que aparece no histórico.
+const atorId = flags.find((f) => f.startsWith("--ator="))?.slice("--ator=".length) || process.env.IMPORTAR_A1_ATOR_ID || null;
+if (atorId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(atorId)) throw new Error("--ator precisa ser o uuid do usuário.");
 
 const linhas: (ResultadoA1 & { codigo: string })[] = [];
 for (const l of [...melhor.values()].sort((a, b) => Number(a.codigo) - Number(b.codigo))) {

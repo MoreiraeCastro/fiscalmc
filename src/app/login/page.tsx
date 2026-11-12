@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Brand } from "@/components/brand";
 import { login } from "./actions";
+import { PasswordInput } from "@/components/password-input";
 
 export const metadata = { title: "Entrar" };
 
@@ -16,7 +17,7 @@ export default async function LoginPage({searchParams}:{searchParams:Promise<{er
       {error&&loginErrors[error]&&<p className="alert error" role="alert">{loginErrors[error]}</p>}
       <form action={login}>
         <div className="field"><label htmlFor="cnpj">CNPJ</label><input className="input" id="cnpj" name="cnpj" inputMode="text" autoComplete="username" placeholder="00.000.000/0000-00" required /></div>
-        <div className="field"><label htmlFor="password">Senha</label><input className="input" id="password" name="password" type="password" autoComplete="current-password" required /></div>
+        <div className="field"><label htmlFor="password">Senha</label><PasswordInput className="input" id="password" name="password" autoComplete="current-password" required /></div>
         <p className="auth-help">Esqueceu a senha? Solicite a redefinição ao escritório.</p>
         <button className="button primary" type="submit">Entrar</button>
       </form>

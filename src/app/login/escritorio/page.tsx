@@ -3,6 +3,7 @@ import { Brand } from "@/components/brand";
 import { redirect } from "next/navigation";
 import { PORTAL_URL, portalLoginUrl } from "@/lib/auth/portal";
 import { officeLogin } from "./actions";
+import { PasswordInput } from "@/components/password-input";
 
 export const metadata = { title: "Acesso do escritório" };
 const errors: Record<string, string> = { invalid_credentials: "Email ou senha inválidos.", rate_limited: "Muitas tentativas. Aguarde um minuto e tente novamente.", configuration: "O acesso está temporariamente indisponível." };
@@ -18,7 +19,7 @@ export default async function OfficeLoginPage({ searchParams }: { searchParams: 
     {error && errors[error] && <p className="alert error" role="alert">{errors[error]}</p>}
     <form action={officeLogin}>
       <div className="field"><label htmlFor="office-email">Email</label><input className="input" id="office-email" name="email" type="email" autoComplete="username" required /></div>
-      <div className="field"><label htmlFor="office-password">Senha</label><input className="input" id="office-password" name="password" type="password" autoComplete="current-password" required /></div>
+      <div className="field"><label htmlFor="office-password">Senha</label><PasswordInput className="input" id="office-password" name="password" autoComplete="current-password" required /></div>
       <button className="button primary" type="submit">Entrar no escritório</button>
     </form>
     <Link className="auth-back-link" href="/login">Voltar ao acesso do cliente</Link>

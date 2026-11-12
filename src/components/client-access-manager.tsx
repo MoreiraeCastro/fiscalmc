@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Copy, KeyRound, LockKeyhole, RotateCcw, ShieldCheck, UserRoundPlus } from "@/components/icons";
 import { apiUrl } from "@/lib/base-path";
 import { confirmar } from "@/components/confirmar";
+import { PasswordInput } from "@/components/password-input";
 
 type Access = { cnpj: string; status: "ACTIVE" | "BLOCKED" | "INVALID"; createdAt: string; blockedAt: string | null };
 type AccessResult = { access: Access | null; readiness: { ready: boolean; status: string; message: string } };
@@ -91,8 +92,8 @@ export function ClientAccessManager({ organizationId, organizationTaxId, initial
     </div>}
     {canWrite && manual && <div className="client-access-password-form">
       <div><strong>{manual === "CREATE" ? "Criar acesso com senha definida" : manual === "REPAIR" ? "Reparar acesso do cliente" : "Redefinir senha"}</strong><p>{manual === "CREATE" ? `O acesso será criado para o CNPJ ${formatCnpj(organizationTaxId)}.` : manual === "REPAIR" ? "Uma nova identidade CLIENT_USER será criada. O acesso administrativo atual será preservado." : "A senha atual não será exibida nem recuperada."}</p></div>
-      <label>Nova senha<input className="input" type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} /></label>
-      <label>Confirmar senha<input className="input" type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} /></label>
+      <label>Nova senha<PasswordInput className="input" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} /></label>
+      <label>Confirmar senha<PasswordInput className="input" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} /></label>
       <div className="client-access-form-actions"><button className="button ghost" type="button" onClick={() => { setManual(null); setError(null); }}>Cancelar</button><button className="button primary" type="button" onClick={submitManual} disabled={saving}><UserRoundPlus size={18}/>{saving ? "Salvando…" : manual === "CREATE" ? "Criar acesso" : manual === "REPAIR" ? "Criar acesso CLIENT_USER" : "Salvar nova senha"}</button></div>
     </div>}
     {canWrite && access && access.status !== "INVALID" && !manual && <div className="client-access-actions">

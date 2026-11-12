@@ -5,6 +5,7 @@ import { Building2, ChevronLeft, CircleAlert, KeyRound, LoaderCircle, MapPin, Sh
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiUrl } from "@/lib/base-path";
+import { PasswordInput } from "@/components/password-input";
 
 export type CnaeSecundario={code:string;description:string};
 export type CompanyFormState={
@@ -122,7 +123,7 @@ export function NewCompanyForm({organizationId,initialValues,canWriteCertificate
         {canWriteCertificate?<>
           {!withoutCertificate?<div className="company-form-grid">
             <Field label="Arquivo A1 (.pfx ou .p12)" required htmlFor="cert-file" className="span-2"><input className="input" id="cert-file" type="file" accept=".pfx,.p12,application/x-pkcs12,application/octet-stream" onChange={event=>{const file=event.target.files?.[0]??null;setCertFile(file);setCertInfo(null);setReceita(null);if(file&&certPassword)void readCertificate(file,certPassword);}}/></Field>
-            <Field label="Senha do certificado" required htmlFor="cert-password"><input className="input" id="cert-password" type="password" autoComplete="new-password" value={certPassword} onChange={event=>{setCertPassword(event.target.value);setCertInfo(null);setReceita(null);}} onBlur={()=>{if(certFile&&certPassword&&!certInfo)void readCertificate();}} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();void readCertificate();}}}/></Field>
+            <Field label="Senha do certificado" required htmlFor="cert-password"><PasswordInput className="input" id="cert-password" autoComplete="new-password" value={certPassword} onChange={event=>{setCertPassword(event.target.value);setCertInfo(null);setReceita(null);}} onBlur={()=>{if(certFile&&certPassword&&!certInfo)void readCertificate();}} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();void readCertificate();}}}/></Field>
             <Field label="&nbsp;" htmlFor="cert-read"><button className="button secondary" type="button" id="cert-read" disabled={certReading||!certFile||!certPassword} onClick={()=>void readCertificate()}>{certReading?"Lendo…":"Ler certificado"}</button></Field>
           </div>:null}
           {certError?<div className="alert error" role="alert"><CircleAlert size={18}/>{certError}</div>:null}

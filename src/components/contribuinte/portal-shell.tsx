@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LogOut } from "@/components/icons";
+import { ChevronLeft, LogOut } from "@/components/icons";
 import { logout } from "@/app/login/actions";
 import { BASE_PATH } from "@/lib/base-path";
 import type { ContextoContribuinte } from "@/lib/contribuinte/contexto";
@@ -15,6 +15,9 @@ export function PortalShell({ contexto, children }: { contexto: ContextoContribu
   return <div className="pc">
     <header className="pc-topo">
       <div className="pc-topo-in">
+        {/* Só o escritório vem do portal do grupo; o cliente não tem para onde voltar. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- o portal fica na raiz do domínio, fora do basePath */}
+        {escritorio ? <a className="portal-back" href="/" title="Voltar ao portal"><ChevronLeft size={15} aria-hidden />Portal</a> : null}
         <Link href="/contribuinte" className="pc-marca" aria-label="Página Principal">
           <Image src={`${BASE_PATH}/icon-192.png`} width={38} height={38} alt="" priority />
           <span><strong>Moreira &amp; Castro</strong><small>Portal Contribuinte · NFS-e</small></span>

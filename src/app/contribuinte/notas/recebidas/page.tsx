@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Aviso, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
+import { Inbox, Search } from "@/components/icons";
+import { Aviso, Cabecalho, Cartao, Trilha, Vazio } from "@/components/contribuinte/portal-shell";
 import { MenuNota } from "@/components/contribuinte/menu-nota";
 import { BotaoAtualizarRecebidas } from "@/components/contribuinte/botao-atualizar-recebidas";
 import { apiUrl } from "@/lib/base-path";
@@ -39,10 +40,7 @@ export default async function RecebidasPage({ searchParams }: { searchParams: Pr
   };
   return <>
     <Trilha itens={["NFS-e", "Recebidas"]} />
-    <div className="pc-titulo-linha">
-      <h1 className="pc-titulo">NFS-e Recebidas</h1>
-      <div className="pc-acoes"><BotaoAtualizarRecebidas /></div>
-    </div>
+    <Cabecalho titulo="NFS-e Recebidas" subtitulo="Notas em que a empresa é tomadora, lidas do ADN." acoes={<BotaoAtualizarRecebidas />} />
     <Cartao>
       <form className="pc-filtros" method="get">
         <label className="largo"><span>Pesquisar pessoa física ou jurídica</span><input name="q" defaultValue={filtros.q} placeholder="Nome, CPF ou CNPJ do prestador" /></label>
@@ -72,7 +70,12 @@ export default async function RecebidasPage({ searchParams }: { searchParams: Pr
             </tr>)}</tbody>
           </table>
         </div>
-        : <p className="pc-vazio">{filtrando ? "Nenhuma NFS-e recebida com esses filtros." : leitura?.last_sync_at ? "Nenhuma NFS-e recebida por esta empresa no ADN." : "Ainda não houve leitura no ADN para esta empresa."}</p>}
+        : filtrando
+          ? <Vazio icone={Search} titulo="Nenhuma NFS-e recebida com esses filtros" texto="Ajuste os filtros ou limpe a busca para ver todas as notas."
+            acao={<Link className="pc-botao secundario" href="/contribuinte/notas/recebidas">Limpar filtros</Link>} />
+          : leitura?.last_sync_at
+            ? <Vazio icone={Inbox} titulo="Nenhuma NFS-e recebida" texto="Nenhuma NFS-e recebida por esta empresa no ADN." />
+            : <Vazio icone={Inbox} titulo="Ainda não houve leitura no ADN" texto="A leitura é automática a cada 2 horas; “Atualizar agora” busca na hora." />}
       <footer className="pc-paginacao">
         <span>Total de {total} {total === 1 ? "registro" : "registros"}</span>
         {paginas > 1 ? <span className="pc-paginas">

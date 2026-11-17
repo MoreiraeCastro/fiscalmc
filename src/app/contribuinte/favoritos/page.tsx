@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Pencil, Plus, Play } from "@/components/icons";
-import { Aviso, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
+import { Pencil, Plus, Play, Star } from "@/components/icons";
+import { Aviso, Cabecalho, Cartao, Trilha, Vazio } from "@/components/contribuinte/portal-shell";
 import { ExcluirRascunho } from "@/components/contribuinte/excluir-rascunho";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
 import { servicosProntos } from "@/lib/contribuinte/emissao";
@@ -20,12 +20,10 @@ export default async function FavoritosPage({ searchParams }: { searchParams: Pr
   const cheio = favoritos.length >= FAVORITOS_MAX;
   return <>
     <Trilha itens={["Serviços Favoritos"]} />
-    <div className="pc-titulo-linha">
-      <h1 className="pc-titulo">Serviços Favoritos</h1>
-      {empresa.podeEmitir ? <div className="pc-acoes">{cheio
+    <Cabecalho titulo="Serviços Favoritos" subtitulo="Serviço, tomador e valor prontos para emitir com um clique."
+      acoes={empresa.podeEmitir ? cheio
         ? <span className="pc-nota">Limite de {FAVORITOS_MAX} favoritos atingido.</span>
-        : <Link className="pc-botao" href="/contribuinte/favoritos/novo"><Plus size={17} aria-hidden />Novo Serviço Favorito</Link>}</div> : null}
-    </div>
+        : <Link className="pc-botao" href="/contribuinte/favoritos/novo"><Plus size={16} aria-hidden />Novo Serviço Favorito</Link> : null} />
     {salvo ? <Aviso tipo="sucesso">Serviço favorito salvo.</Aviso> : null}
     <Cartao>
       {favoritos.length ? <div className="pc-tabela-rolagem"><table className="pc-tabela">
@@ -41,7 +39,8 @@ export default async function FavoritosPage({ searchParams }: { searchParams: Pr
             <ExcluirRascunho id={fav.id} action={excluirFavoritoAction} pergunta="Excluir este serviço favorito?" titulo="Excluir favorito" />
           </> : null}</td>
         </tr>)}</tbody>
-      </table></div> : <p className="pc-vazio">Nenhum serviço favorito ainda.</p>}
+      </table></div> : <Vazio icone={Star} titulo="Nenhum serviço favorito ainda" texto="Salve um serviço com tomador e valor para emitir com um clique."
+        acao={empresa.podeEmitir && !cheio ? <Link className="pc-botao" href="/contribuinte/favoritos/novo"><Plus size={16} aria-hidden />Novo Serviço Favorito</Link> : null} />}
       <p className="pc-paginacao"><span>{favoritos.length} de {FAVORITOS_MAX} favoritos</span></p>
     </Cartao>
   </>;

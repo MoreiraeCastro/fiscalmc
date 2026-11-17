@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { FilePlus2, RotateCw } from "@/components/icons";
-import { Cartao, Trilha } from "@/components/contribuinte/portal-shell";
+import { FilePlus2, FileText, RotateCw, Search } from "@/components/icons";
+import { Cabecalho, Cartao, Trilha, Vazio } from "@/components/contribuinte/portal-shell";
 import { TabelaNotas } from "@/components/contribuinte/tabela-notas";
 import { SeletorCompetencia } from "@/components/contribuinte/seletor-competencia";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
@@ -32,13 +32,11 @@ export default async function EmitidasPage({ searchParams }: { searchParams: Pro
   };
   return <>
     <Trilha itens={["NFS-e", "Emitidas"]} />
-    <div className="pc-titulo-linha">
-      <h1 className="pc-titulo">NFS-e Emitidas</h1>
-      <div className="pc-acoes">
-        <Link className="pc-botao" href="/contribuinte/nova"><FilePlus2 size={17} aria-hidden />Nova NFS-e</Link>
+    <Cabecalho titulo="NFS-e Emitidas" subtitulo="Notas emitidas pela empresa, com filtro por tomador, período e competência."
+      acoes={<>
         <Link className="pc-botao secundario" href={link(pagina)} title="Recarregar lista"><RotateCw size={16} aria-hidden />Recarregar lista</Link>
-      </div>
-    </div>
+        <Link className="pc-botao" href="/contribuinte/nova"><FilePlus2 size={16} aria-hidden />Nova NFS-e</Link>
+      </>} />
     <Cartao>
       <form className="pc-filtros" method="get">
         <label className="largo"><span>Pesquisar pessoa física ou jurídica</span><input name="q" defaultValue={filtros.q} placeholder="Nome, CPF ou CNPJ do tomador" /></label>
@@ -49,7 +47,11 @@ export default async function EmitidasPage({ searchParams }: { searchParams: Pro
       </form>
       {linhas.length
         ? <TabelaNotas linhas={linhas} municipio={nomeMunicipio(empresa.municipio)} escritorio={escritorio} />
-        : <p className="pc-vazio">{filtrando ? "Nenhuma NFS-e encontrada com esses filtros." : "Nenhuma NFS-e emitida ainda para esta empresa."}</p>}
+        : filtrando
+          ? <Vazio icone={Search} titulo="Nenhuma NFS-e encontrada com esses filtros" texto="Ajuste os filtros ou limpe a busca para ver todas as notas."
+            acao={<Link className="pc-botao secundario" href="/contribuinte/notas/emitidas">Limpar filtros</Link>} />
+          : <Vazio icone={FileText} titulo="Nenhuma NFS-e emitida ainda para esta empresa" texto="A primeira nota emitida aparece aqui."
+            acao={<Link className="pc-botao" href="/contribuinte/nova"><FilePlus2 size={16} aria-hidden />Nova NFS-e</Link>} />}
       <footer className="pc-paginacao">
         <span>Total de {total} {total === 1 ? "registro" : "registros"}</span>
         {paginas > 1 ? <span className="pc-paginas">

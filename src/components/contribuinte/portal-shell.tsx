@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronLeft, LogOut } from "@/components/icons";
+import { ChevronLeft, Inbox, LogOut, type Icon } from "@/components/icons";
 import { logout } from "@/app/login/actions";
 import { BASE_PATH } from "@/lib/base-path";
 import type { ContextoContribuinte } from "@/lib/contribuinte/contexto";
@@ -47,7 +47,28 @@ export function Trilha({ itens }: { itens: (string | [string, string])[] }) {
   </nav>;
 }
 
-/** Cartão branco com título verde em caixa alta, como "INFORMAÇÕES GERAIS". */
+/** Cabeçalho da página (DESIGN.md §6): título e uma linha de contexto à esquerda, ações à direita. */
+export function Cabecalho({ titulo, subtitulo, acoes }: { titulo: React.ReactNode; subtitulo?: React.ReactNode; acoes?: React.ReactNode }) {
+  return <div className="pc-titulo-linha">
+    <div className="pc-titulo-texto">
+      <h1 className="pc-titulo">{titulo}</h1>
+      {subtitulo ? <p className="pc-subtitulo">{subtitulo}</p> : null}
+    </div>
+    {acoes ? <div className="pc-acoes">{acoes}</div> : null}
+  </div>;
+}
+
+/** Estado vazio (DESIGN.md §6): ícone num quadro suave, título, uma linha de instrução e a ação, quando houver. */
+export function Vazio({ icone: Icone = Inbox, titulo, texto, acao }: { icone?: Icon; titulo: string; texto?: React.ReactNode; acao?: React.ReactNode }) {
+  return <div className="pc-vazio-bloco">
+    <span className="pc-vazio-icone"><Icone size={20} aria-hidden /></span>
+    <strong>{titulo}</strong>
+    {texto ? <p>{texto}</p> : null}
+    {acao ? <div className="pc-vazio-acao">{acao}</div> : null}
+  </div>;
+}
+
+/** Cartão branco com título de bloco (14px/600), como "Informações gerais". */
 export function Cartao({ titulo, acoes, children, className = "" }: { titulo?: string; acoes?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return <section className={`pc-cartao ${className}`}>
     {titulo || acoes ? <header className="pc-cartao-topo">{titulo ? <h2>{titulo}</h2> : <span />}{acoes}</header> : null}

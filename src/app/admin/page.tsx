@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Building2, CircleAlert, CircleCheck, FilePlus2, Plus, ScrollText } from "@/components/icons";
 import { redirect } from "next/navigation";
-import { PageHeader, StatusBadge, formatDateTime } from "@/components/ui-kit";
+import { EmptyState, PageHeader, StatusBadge, formatDateTime } from "@/components/ui-kit";
 import { requireOfficeDataClient } from "@/lib/auth/session";
 import { getCertificateOperationalState } from "@/lib/operations/queue";
 import { loadEmissionProblems } from "@/lib/operations/emission-problems-data";
@@ -58,11 +58,11 @@ export default async function AdminPage() {
       {companies.length ? <div className="office-readiness-list">{companies.slice(0, 10).map((company) => {
         const state = readiness(company, certificates.get(company.id));
         return <article key={company.id}><div><Link href={`/admin/empresas/${company.id}`}>{company.legal_name}</Link><small>{company.emission_blocked ? "Há uma configuração pendente." : "Dados operacionais acompanhados pelo escritório."}</small></div><div><span>Prontidão</span><StatusBadge tone={state.tone}>{state.label}</StatusBadge></div><div><span>Serviços</span><strong>Ver empresa</strong></div><div><span>Certificado</span><strong>{certificates.has(company.id) ? "Cadastrado" : "Pendente"}</strong></div><Link className="office-row-action" href={`/admin/empresas/${company.id}`}><span>Abrir</span><ArrowUpRight size={16} aria-hidden /></Link></article>;
-      })}</div> : <div className="v2-empty"><Building2 size={22} aria-hidden /><strong>Nenhuma empresa cadastrada.</strong></div>}
+      })}</div> : <EmptyState icon={Building2} title="Nenhuma empresa cadastrada" description="Cadastre a primeira empresa para acompanhar a prontidão fiscal." action={<Link href="/admin/empresas/nova" className="button primary"><Plus size={17} aria-hidden />Nova empresa</Link>} />}
     </section>
 
     <div className="office-dashboard-lower">
-      <section className="office-section" aria-labelledby="activity-heading"><div className="office-section-heading"><div><span className="office-eyebrow">Acompanhamento</span><h2 id="activity-heading">Atividade recente</h2></div><Link className="v2-text-action" href="/admin/logs">Ver histórico</Link></div>{audits.length ? <ol className="office-activity">{audits.map((audit) => { const event = presentAuditEvent(audit.action); const organization = relationOne(audit.organizations); return <li key={audit.id}><time>{formatDateTime(audit.created_at)}</time><div><strong>{event.label}</strong><small>{organization?.legal_name ?? "Empresa não informada"} · {presentAuditActor(audit.actor_type)}</small></div></li>; })}</ol> : <div className="v2-empty compact"><ScrollText size={20} aria-hidden /><strong>Sem atividade recente.</strong></div>}</section>
+      <section className="office-section" aria-labelledby="activity-heading"><div className="office-section-heading"><div><span className="office-eyebrow">Acompanhamento</span><h2 id="activity-heading">Atividade recente</h2></div><Link className="v2-text-action" href="/admin/logs">Ver histórico</Link></div>{audits.length ? <ol className="office-activity">{audits.map((audit) => { const event = presentAuditEvent(audit.action); const organization = relationOne(audit.organizations); return <li key={audit.id}><time>{formatDateTime(audit.created_at)}</time><div><strong>{event.label}</strong><small>{organization?.legal_name ?? "Empresa não informada"} · {presentAuditActor(audit.actor_type)}</small></div></li>; })}</ol> : <EmptyState compact icon={ScrollText} title="Sem atividade recente" description="As ações do escritório e das empresas aparecem aqui." />}</section>
       <section className="office-section office-primary-actions" aria-labelledby="actions-heading"><div className="office-section-heading"><div><span className="office-eyebrow">Atalhos</span><h2 id="actions-heading">Ações principais</h2><p>Comece pelas tarefas mais frequentes do escritório.</p></div></div><div><Link href="/admin/emissoes" className="button primary"><FilePlus2 size={18} aria-hidden />Emitir NFS-e</Link><Link href="/admin/empresas/nova" className="button secondary"><Plus size={18} aria-hidden />Nova empresa</Link></div></section>
     </div>
   </div>;

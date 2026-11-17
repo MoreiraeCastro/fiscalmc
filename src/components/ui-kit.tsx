@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Inbox } from "@/components/icons";
+import { ArrowRight, Inbox, type Icon } from "@/components/icons";
 
 export function PageHeader({
   title,
@@ -36,9 +36,9 @@ export function StatusBadge({ children, tone = "neutral" }: { children: React.Re
   return <span className={`v2-badge v2-badge-${tone}`}>{children}</span>;
 }
 
-export function EmptyState({ title, description, action }: { title: string; description?: string; action?: React.ReactNode }) {
-  return <div className="v2-empty">
-    <span className="v2-empty-icon"><Inbox size={22} aria-hidden /></span>
+export function EmptyState({ title, description, action, icon: IconComponent = Inbox, compact = false }: { title: string; description?: string; action?: React.ReactNode; icon?: Icon; compact?: boolean }) {
+  return <div className={`v2-empty${compact ? " compact" : ""}`}>
+    <span className="v2-empty-icon"><IconComponent size={20} aria-hidden /></span>
     <strong>{title}</strong>
     {description ? <p>{description}</p> : null}
     {action ? <div>{action}</div> : null}

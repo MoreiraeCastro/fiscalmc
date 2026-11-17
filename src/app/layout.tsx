@@ -1,7 +1,11 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegistration } from "@/components/pwa/service-worker-registration";
 import { BASE_PATH } from "@/lib/base-path";
+
+// Inter auto-hospedada no build (como no portal-hub): a fonte sai do próprio domínio, sem CDN de terceiro.
+const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: { default: "Moreira & Castro", template: "%s | Moreira & Castro" },
@@ -15,8 +19,8 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "Moreira & Castro", statusBarStyle: "default" }
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#082240" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#0f172a" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="pt-BR"><body>{children}<ServiceWorkerRegistration /></body></html>;
+  return <html lang="pt-BR" className={inter.variable}><body>{children}<ServiceWorkerRegistration /></body></html>;
 }

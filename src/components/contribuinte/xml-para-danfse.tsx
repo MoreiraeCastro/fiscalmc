@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Download, FileUp } from "@/components/icons";
+import { Download, FileUp, LoaderCircle } from "@/components/icons";
 import { apiUrl } from "@/lib/base-path";
 
 type Item = { nome: string; estado: "gerando" | "pronto" | "erro"; url?: string; erro?: string };
@@ -53,9 +53,10 @@ export function XmlParaDanfse() {
       onDragLeave={() => setArrastando(false)}
       onDrop={(e) => { e.preventDefault(); setArrastando(false); void gerar(Array.from(e.dataTransfer.files)); }}
     >
-      <FileUp size={28} aria-hidden />
+      <span className="pc-soltar-icone"><FileUp size={20} aria-hidden /></span>
       <p><strong>Arraste os XMLs aqui</strong> ou</p>
-      <button className="pc-botao" type="button" onClick={() => entrada.current?.click()}>Escolher arquivos</button>
+      <button className="pc-botao secundario" type="button" onClick={() => entrada.current?.click()}>Escolher arquivos</button>
+      <small>Um ou vários XMLs de NFS-e; cada PDF baixa ao ficar pronto.</small>
       <input ref={entrada} type="file" accept=".xml,application/xml,text/xml" multiple hidden
         onChange={(e) => { void gerar(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
     </div>
@@ -65,7 +66,7 @@ export function XmlParaDanfse() {
         <thead><tr><th>Arquivo</th><th>Situação</th><th><span className="sr-only">Baixar</span></th></tr></thead>
         <tbody>{itens.map((item, i) => <tr key={`${item.nome}-${i}`}>
           <td>{item.nome}</td>
-          <td>{item.estado === "gerando" ? "Gerando…" : item.estado === "pronto" ? <em className="pc-selo ok">PDF pronto</em> : <span className="pc-erro-texto">{item.erro}</span>}</td>
+          <td>{item.estado === "gerando" ? <span className="pc-gerando"><LoaderCircle className="spin" size={14} aria-hidden />Gerando…</span> : item.estado === "pronto" ? <em className="pc-selo ok">PDF pronto</em> : <span className="pc-erro-texto">{item.erro}</span>}</td>
           <td>{item.url ? <a className="pc-botao secundario" href={item.url} download={pdfDe(item.nome)}><Download size={15} aria-hidden />Baixar PDF</a> : null}</td>
         </tr>)}</tbody>
       </table>

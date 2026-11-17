@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Aviso, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
+import { Aviso, Cabecalho, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { BarraPassos } from "@/components/contribuinte/campos";
 import { FormPessoas } from "@/components/contribuinte/form-pessoas";
 import { FormServico } from "@/components/contribuinte/form-servico";
@@ -41,7 +41,7 @@ export default async function PassoPage({ params }: { params: Promise<{ rascunho
   const subst = dados.substituicao;
   const cabecalho = <>
     <Trilha itens={[subst ? "Substituição de NFS-e" : "Emissão Completa", subst && passo.numero === 4 ? "Substituição" : passo.rotulo]} />
-    <h1 className="pc-titulo">{subst ? "Substituição de NFS-e" : "Emissão completa"}</h1>
+    <Cabecalho titulo={subst ? "Substituição de NFS-e" : "Emissão completa"} subtitulo={subst ? "Nova nota que substitui a NFS-e indicada abaixo." : "Pessoas, serviço, valores e emissão, em 4 passos."} />
     <BarraPassos atual={passo.numero} liberado={liberado} rascunhoId={rascunhoId} substituicao={Boolean(subst)} />
     {subst ? <Cartao titulo="Substituição de NFS-e" className="pc-subst">
       <dl className="pc-resumo">

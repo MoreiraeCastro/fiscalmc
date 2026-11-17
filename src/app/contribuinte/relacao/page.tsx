@@ -1,5 +1,5 @@
 import { FileCode, FileSpreadsheet, FileText } from "@/components/icons";
-import { Cartao, Trilha } from "@/components/contribuinte/portal-shell";
+import { Cabecalho, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { SeletorCompetencia } from "@/components/contribuinte/seletor-competencia";
 import { apiUrl } from "@/lib/base-path";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
@@ -19,7 +19,7 @@ export default async function RelacaoPage() {
   const { atual, anterior } = competencias();
   return <>
     <Trilha itens={["Relação de NFS-e"]} />
-    <div className="pc-titulo-linha"><h1 className="pc-titulo">Relação de NFS-e</h1></div>
+    <Cabecalho titulo="Relação de NFS-e" subtitulo="Planilha, XML ou PDF das notas de uma competência." />
     <Cartao>
       <form className="pc-relacao" method="get" action={apiUrl("/api/contribuinte/relacao")}>
         <fieldset>

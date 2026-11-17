@@ -1,4 +1,5 @@
-import { Aviso, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
+import { Search } from "@/components/icons";
+import { Aviso, Cabecalho, Cartao, Trilha, Vazio } from "@/components/contribuinte/portal-shell";
 import { contextoContribuinte } from "@/lib/contribuinte/contexto";
 import { formatarDocumento } from "@/lib/contribuinte/formato";
 import { nomeMunicipio } from "@/lib/contribuinte/municipios";
@@ -15,10 +16,10 @@ export default async function EscolherEmpresaPage({ searchParams }: { searchPara
     : empresas;
   return <>
     <Trilha itens={["Escolher empresa"]} />
-    <h1 className="pc-titulo">Para qual empresa você vai trabalhar?</h1>
+    <Cabecalho titulo="Para qual empresa você vai trabalhar?" subtitulo="A empresa escolhida vale para emitir e consultar notas." />
     <Cartao titulo="Empresas" acoes={<form className="pc-busca" method="get">{voltar ? <input type="hidden" name="voltar" value={voltar} /> : null}<input name="q" defaultValue={q} placeholder="Pesquisar por razão social ou CNPJ" aria-label="Pesquisar empresa" /><button className="pc-botao secundario" type="submit">Pesquisar</button></form>}>
       {!empresas.length ? <Aviso>Nenhuma empresa disponível para o seu usuário.</Aviso> : null}
-      {empresas.length && !lista.length ? <p className="pc-vazio">Nenhuma empresa encontrada para “{q}”.</p> : null}
+      {empresas.length && !lista.length ? <Vazio icone={Search} titulo="Nenhuma empresa encontrada" texto={<>Nada encontrado para “{q}”. Tente parte da razão social ou do CNPJ.</>} /> : null}
       <ul className="pc-empresas">
         {lista.map((item) => (
           <li key={item.id} className={empresa?.id === item.id ? "atual" : undefined}>

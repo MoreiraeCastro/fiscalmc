@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Aviso, Trilha } from "@/components/contribuinte/portal-shell";
+import { Aviso, Cabecalho, Trilha } from "@/components/contribuinte/portal-shell";
 import { FormRapida, type InicialRapida } from "@/components/contribuinte/form-rapida";
 import { RevisaoEmissao } from "@/components/contribuinte/revisao-emissao";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
@@ -27,10 +27,8 @@ export default async function EmissaoRapidaPage({ searchParams }: { searchParams
   const [modo, servicos] = await Promise.all([modoEmissao(empresa.id), servicosProntos(empresa.id)]);
   const cabecalho = <>
     <Trilha itens={["Emissão rápida"]} />
-    <div className="pc-titulo-linha">
-      <h1 className="pc-titulo">Emissão rápida</h1>
-      <div className="pc-acoes"><Link className="pc-link" href="/contribuinte/dps/novo/pessoas">Emissão completa (4 passos)</Link></div>
-    </div>
+    <Cabecalho titulo="Emissão rápida" subtitulo="Tomador, serviço e valor numa tela só."
+      acoes={<Link className="pc-link" href="/contribuinte/dps/novo/pessoas">Emissão completa (4 passos)</Link>} />
     {!empresa.podeEmitir ? <Aviso tipo="alerta">Sem permissão para emitir por esta empresa.</Aviso> : null}
     {empresa.emissaoBloqueada ? <Aviso tipo="alerta">Emissão bloqueada até o escritório concluir o cadastro.</Aviso> : null}
     {!modo.perfilAceito ? <Aviso tipo="alerta">{modo.exigeRevisao ? "Configuração fiscal ainda não revisada pelo escritório."

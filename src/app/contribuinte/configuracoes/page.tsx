@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Cartao, Trilha } from "@/components/contribuinte/portal-shell";
+import { Cabecalho, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { FormContato } from "@/components/contribuinte/form-contato";
 import { FormTotalTributos, type InicialTotalTributos } from "@/components/contribuinte/form-total-tributos";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
@@ -32,7 +32,7 @@ export default async function ConfiguracoesPage() {
   };
   return <>
     <Trilha itens={["Configurações"]} />
-    <h1 className="pc-titulo">Configurações</h1>
+    <Cabecalho titulo="Configurações" subtitulo="Contato do prestador e valor aproximado dos tributos na DPS." />
     <Cartao titulo="Informações de contato">
       <p className="pc-texto">Contato do prestador na DPS.</p>
       <FormContato inicial={{ email: empresa.email ?? "", telefone: empresa.telefone ?? "" }} podeEditar={empresa.podeEmitir} />

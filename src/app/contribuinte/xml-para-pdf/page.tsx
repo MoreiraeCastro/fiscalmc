@@ -1,4 +1,4 @@
-import { Cartao, Trilha } from "@/components/contribuinte/portal-shell";
+import { Cabecalho, Cartao, Trilha } from "@/components/contribuinte/portal-shell";
 import { XmlParaDanfse } from "@/components/contribuinte/xml-para-danfse";
 import { contextoContribuinte } from "@/lib/contribuinte/contexto";
 
@@ -9,7 +9,7 @@ export default async function XmlParaPdfPage() {
   await contextoContribuinte();
   return <>
     <Trilha itens={["XML para DANFS-e"]} />
-    <div className="pc-titulo-linha"><h1 className="pc-titulo">XML para DANFS-e</h1></div>
+    <Cabecalho titulo="XML para DANFS-e" subtitulo="Gere o PDF de qualquer XML de NFS-e do padrão nacional." />
     <Cartao>
       <XmlParaDanfse />
     </Cartao>

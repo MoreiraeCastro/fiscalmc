@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Aviso, Trilha } from "@/components/contribuinte/portal-shell";
+import { Aviso, Cabecalho, Trilha } from "@/components/contribuinte/portal-shell";
 import { FormFavorito } from "@/components/contribuinte/form-favorito";
 import { exigirEmpresa } from "@/lib/contribuinte/contexto";
 import { centavosParaTexto } from "@/lib/contribuinte/dps";
@@ -21,7 +21,7 @@ export default async function FavoritoPage({ params }: { params: Promise<{ id: s
   const dados = favorito?.dados;
   return <>
     <Trilha itens={[["Serviços Favoritos", "/contribuinte/favoritos"], novo ? "Novo" : favorito!.nome]} />
-    <h1 className="pc-titulo">{novo ? "Novo Serviço Favorito" : "Editar Serviço Favorito"}</h1>
+    <Cabecalho titulo={novo ? "Novo Serviço Favorito" : "Editar Serviço Favorito"} subtitulo="Serviço, tomador e valor usados ao emitir com este favorito." />
     {lotado ? <Aviso tipo="alerta">Limite de {FAVORITOS_MAX} favoritos atingido. Exclua um para incluir outro.</Aviso> : null}
     {!servicos.length ? <Aviso tipo="alerta">Nenhum serviço liberado para emissão nesta empresa.</Aviso> : null}
     {!lotado ? <FormFavorito favoritoId={novo ? null : id}

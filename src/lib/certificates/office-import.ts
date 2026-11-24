@@ -10,6 +10,7 @@ import { resolveCnaeActivity } from "@/lib/organizations/cnae-activity-resolver"
 import { createServiceFromNationalCode } from "@/lib/services/catalog-linking";
 import { logEvent } from "@/lib/observability/logger";
 import { consultarCnpjPublico } from "@/lib/cnpj/consulta-publica";
+import { codigoMunicipio } from "@/lib/contribuinte/municipios";
 
 /**
  * Cadastro de A1 pelo escritório (tela "Subir certificado" do portal e importação em lote):
@@ -58,16 +59,17 @@ async function consultaCnpj(cnpj: string) {
 
 /**
  * Plano C quando nem a BrasilAPI nem a CNPJá respondem: a mesma empresa na base do portal (core.companies, mesmo banco), que já tem
- * os dados da Receita. Devolve no formato da BrasilAPI para o resto do cadastro não mudar.
+ * os dados da Receita (ou do cartão CNPJ da pasta, quando o CNPJ é novo demais para a base aberta: aí o código IBGE sai
+ * do nome da cidade). Devolve no formato da BrasilAPI para o resto do cadastro não mudar.
  */
 async function dadosDoPortal(db: SupabaseClient, cnpj: string): Promise<Record<string, unknown> | null> {
   const { data: e } = await db.schema("core").from("companies")
-    .select("corporate_name,trade_name,municipality_code,postal_code,street,address_number,address_complement,neighborhood,uf,email,cnae_code,cnae_description,cnaes_secondary")
+    .select("corporate_name,trade_name,municipality_code,municipality_name,postal_code,street,address_number,address_complement,neighborhood,uf,email,cnae_code,cnae_description,cnaes_secondary")
     .eq("document", cnpj).maybeSingle();
   if (!e) return null;
   const digitos = (v: unknown) => String(v ?? "").replace(/\D/g, "");
   return {
-    razao_social: e.corporate_name, nome_fantasia: e.trade_name, codigo_municipio_ibge: digitos(e.municipality_code), cep: e.postal_code,
+    razao_social: e.corporate_name, nome_fantasia: e.trade_name, codigo_municipio_ibge: digitos(e.municipality_code) || codigoMunicipio(e.municipality_name, e.uf) || "", cep: e.postal_code,
     logradouro: e.street, numero: e.address_number, complemento: e.address_complement, bairro: e.neighborhood, uf: e.uf, email: e.email,
     cnae_fiscal: digitos(e.cnae_code) || null, cnae_fiscal_descricao: e.cnae_description,
     cnaes_secundarios: Array.isArray(e.cnaes_secondary)

@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildAutomaticFiscalConfiguration, type CnpjTaxStatus } from "@/lib/nfse/fiscal-configuration";
 import { logEvent } from "@/lib/observability/logger";
+import { consultarCnpjPublico } from "@/lib/cnpj/consulta-publica";
 
 const simplesSchema = z.object({
   opcao_pelo_simples: z.boolean().nullable().optional(),
@@ -10,17 +11,14 @@ const simplesSchema = z.object({
 });
 
 /**
- * Situação no Simples e no MEI pela base pública da Receita (BrasilAPI, a mesma da consulta de CNPJ do cadastro).
+ * Situação no Simples e no MEI pela base pública da Receita (BrasilAPI, com a CNPJá de reserva).
  * null = não deu para saber; aí o perfil não é criado (nunca se adivinha o regime).
  */
 export async function lookupCnpjTaxStatus(cnpj: string): Promise<CnpjTaxStatus | null> {
   try {
-    const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, {
-      headers: { accept: "application/json", "user-agent": "Mozilla/5.0 (compatible; FiscalMC/1.0; +https://fiscalmc.vercel.app)" },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!response.ok) return null;
-    const parsed = simplesSchema.safeParse(await response.json());
+    const consulta = await consultarCnpjPublico(cnpj);
+    if (consulta.status !== "ok") return null;
+    const parsed = simplesSchema.safeParse(consulta.dados);
     if (!parsed.success || typeof parsed.data.opcao_pelo_simples !== "boolean") return null;
     return { simples: parsed.data.opcao_pelo_simples, mei: parsed.data.opcao_pelo_mei === true };
   } catch {

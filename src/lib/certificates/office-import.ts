@@ -9,6 +9,7 @@ import { ensureAutomaticTaxProfile } from "@/lib/organizations/automatic-tax-pro
 import { resolveCnaeActivity } from "@/lib/organizations/cnae-activity-resolver";
 import { createServiceFromNationalCode } from "@/lib/services/catalog-linking";
 import { logEvent } from "@/lib/observability/logger";
+import { consultarCnpjPublico } from "@/lib/cnpj/consulta-publica";
 
 /**
  * Cadastro de A1 pelo escritório (tela "Subir certificado" do portal e importação em lote):
@@ -24,7 +25,6 @@ const fusoBrasilia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_P
 export const dia = (iso: string) => fusoBrasilia.format(new Date(iso));
 /** Mesmo vencimento no controle com folga de um dia (a planilha antiga às vezes anotou o dia seguinte; o controle já tem dias gravados em UTC). */
 export const mesmoDia = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) <= 86_400_000;
-const dormir = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Tenta as senhas na ordem. null = nenhuma abriu; "ILEGIVEL" = abriu mas não é um A1 legível. */
 export function abrirA1(buffer: Buffer, senhas: string[]): A1Aberto | "ILEGIVEL" | null {
@@ -50,18 +50,14 @@ function clienteDoControle(): SupabaseClient | null {
   return url && key ? createClient(url, key, { auth: { persistSession: false } }) : null;
 }
 
+/** BrasilAPI (4 tentativas) e, se ela não responder, a CNPJá. */
 async function consultaCnpj(cnpj: string) {
-  for (let t = 0; t < 4; t++) {
-    const r = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, { headers: { accept: "application/json", "user-agent": "Mozilla/5.0 (compatible; FiscalMC/1.0)" }, signal: AbortSignal.timeout(15_000) }).catch(() => null);
-    if (r?.ok) return (await r.json()) as Record<string, unknown>;
-    if (r?.status === 404) return null;
-    await dormir(5_000 * (t + 1));
-  }
-  return null;
+  const r = await consultarCnpjPublico(cnpj, { tentativas: 4, timeoutMs: 15_000 });
+  return r.status === "ok" ? r.dados : null;
 }
 
 /**
- * Plano B quando a BrasilAPI não responde: a mesma empresa na base do portal (core.companies, mesmo banco), que já tem
+ * Plano C quando nem a BrasilAPI nem a CNPJá respondem: a mesma empresa na base do portal (core.companies, mesmo banco), que já tem
  * os dados da Receita. Devolve no formato da BrasilAPI para o resto do cadastro não mudar.
  */
 async function dadosDoPortal(db: SupabaseClient, cnpj: string): Promise<Record<string, unknown> | null> {

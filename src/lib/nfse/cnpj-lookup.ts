@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { consultarCnpjPublico } from "@/lib/cnpj/consulta-publica";
 
 const brasilApiSchema = z.object({
   razao_social: z.string().nullable().optional(),
@@ -24,21 +25,13 @@ function formatPhone(raw?: string | null) {
   return digits;
 }
 
-/** Public Receita data for a CNPJ via BrasilAPI (shared by the tomador forms). */
+/** Public Receita data for a CNPJ via BrasilAPI, com a CNPJá de reserva (shared by the tomador forms). */
 export async function lookupCnpj(cnpj: string): Promise<CnpjLookupResult> {
   if (!/^\d{14}$/.test(cnpj)) return { ok: false, status: 400, error: "Informe um CNPJ com 14 dígitos." };
-  let response: Response;
-  try {
-    response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, {
-      headers: { accept: "application/json", "user-agent": "Mozilla/5.0 (compatible; FiscalMC/1.0; +https://fiscalmc.vercel.app)" },
-      signal: AbortSignal.timeout(10_000),
-    });
-  } catch {
-    return { ok: false, status: 502, error: "Não foi possível consultar o CNPJ agora. Tente novamente." };
-  }
-  if (response.status === 404) return { ok: false, status: 404, error: "CNPJ não encontrado." };
-  if (!response.ok) return { ok: false, status: 502, error: "Não foi possível consultar o CNPJ agora. Tente novamente." };
-  const parsed = brasilApiSchema.safeParse(await response.json());
+  const consulta = await consultarCnpjPublico(cnpj);
+  if (consulta.status === "nao_encontrado") return { ok: false, status: 404, error: "CNPJ não encontrado." };
+  if (consulta.status !== "ok") return { ok: false, status: 502, error: "Não foi possível consultar o CNPJ agora. Tente novamente." };
+  const parsed = brasilApiSchema.safeParse(consulta.dados);
   if (!parsed.success) return { ok: false, status: 502, error: "Resposta inesperada da consulta de CNPJ." };
   const municipalityCode = parsed.data.codigo_municipio_ibge ? String(parsed.data.codigo_municipio_ibge) : "";
   return {

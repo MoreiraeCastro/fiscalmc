@@ -35,9 +35,12 @@ export default async function RelacaoPage() {
             <select name="tipo" className="pc-input" defaultValue="emitidas">
               <option value="emitidas">Emitidas</option>
               <option value="recebidas">Recebidas</option>
+              <option value="ambas">Emitidas e recebidas</option>
             </select>
           </label>
-          <div className="pc-filtro-competencia"><span>Competência</span><SeletorCompetencia name="competencia" inicial={anterior} limite={atual} /></div>
+          <div className="pc-filtro-competencia"><span>Competência de</span><SeletorCompetencia name="competencia" inicial={anterior} limite={atual} /></div>
+          <div className="pc-filtro-competencia"><span>até</span><SeletorCompetencia name="ate" inicial={anterior} limite={atual} /></div>
+          <p className="pc-meta pc-rel-dica">Até 12 competências por arquivo.</p>
         </div>
       </Cartao>
       <Cartao>

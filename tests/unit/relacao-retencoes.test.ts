@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { linhaCompleta } from "@/lib/contribuinte/relacao-notas";
+import { intervaloDoPeriodo, linhaCompleta } from "@/lib/contribuinte/relacao-notas";
 
 /** Nota de R$ 10.000 com ISS retido pelo tomador, IRRF, INSS e PIS/COFINS/CSLL retidos. */
 function xml(opcoes: { tpRetISSQN?: string; vLiq?: string | null } = {}) {
@@ -37,5 +37,13 @@ describe("relação com retenções", () => {
   it("sem vLiq no XML, o líquido é o serviço menos o retido", () => {
     const v = linhaCompleta(xml({ vLiq: null }), [])!.valores;
     expect(v["Valor Líquido (R$)"]).toBe(8434.5);
+  });
+});
+
+describe("período de várias competências", () => {
+  it("vai do dia 1 da primeira ao último dia da última", () => {
+    expect(intervaloDoPeriodo("2026-01", "2026-03")).toEqual({ de: "2026-01-01", ate: "2026-03-31" });
+    expect(intervaloDoPeriodo("2024-02")).toEqual({ de: "2024-02-01", ate: "2024-02-29" });
+    expect(intervaloDoPeriodo("2025-11", "2026-02")).toEqual({ de: "2025-11-01", ate: "2026-02-28" });
   });
 });

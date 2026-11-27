@@ -16,6 +16,8 @@ import { gerarDanfsePdf } from "@/lib/nfse/danfse/pdf";
  * fora deste emissor) e, nas emitidas, as nossas que o ADN ainda não devolveu.
  */
 export type TipoRelacao = "emitidas" | "recebidas";
+/** O que a tela deixa escolher: emitidas, recebidas ou as duas na mesma planilha (coluna "Tipo"). */
+export type TipoEscolha = TipoRelacao | "ambas";
 export type ModeloRelacao = "simples" | "completa" | "retencoes";
 export type FormatoArquivos = "xml" | "pdf";
 
@@ -229,6 +231,14 @@ export function intervaloDaCompetencia(competencia: string) {
   return { de: `${competencia}-01`, ate: `${competencia}-${String(ultimo).padStart(2, "0")}` };
 }
 
+/** Período de várias competências: do dia 1 da primeira ao último dia da última. */
+export function intervaloDoPeriodo(inicio: string, fim: string = inicio) {
+  return { de: intervaloDaCompetencia(inicio).de, ate: intervaloDaCompetencia(fim).ate };
+}
+const PAPEIS: Record<TipoRelacao, string[]> = { emitidas: ["PRESTADOR"], recebidas: ["TOMADOR", "INTERMEDIARIO"] };
+const tiposDa = (tipo: TipoEscolha): TipoRelacao[] => (tipo === "ambas" ? ["emitidas", "recebidas"] : [tipo]);
+const ROTULO_TIPO: Record<TipoEscolha, string> = { emitidas: "Emitidas", recebidas: "Recebidas", ambas: "Emitidas e Recebidas" };
+
 async function paginas<T>(pagina: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: unknown }>) {
   const saida: T[] = [];
   for (let de = 0; ; de += 1000) {
@@ -243,7 +253,7 @@ async function paginas<T>(pagina: (de: number, ate: number) => PromiseLike<{ dat
 async function notasDaCompetencia(empresaId: string, tipo: TipoRelacao, de: string, ate: string) {
   const db = createAdminClient();
   const ambiente = getConfiguredNFSeEnvironment();
-  const papeis = tipo === "emitidas" ? ["PRESTADOR"] : ["TOMADOR", "INTERMEDIARIO"];
+  const papeis = PAPEIS[tipo];
   const doAdn = await paginas((i, f) => db.from("received_documents").select("access_key,xml")
     .eq("organization_id", empresaId).eq("environment", ambiente).eq("document_type", "NFSE").in("role", papeis)
     .gte("competence", de).lte("competence", ate).order("nsu", { ascending: true }).range(i, f));
@@ -271,16 +281,28 @@ async function notasDaCompetencia(empresaId: string, tipo: TipoRelacao, de: stri
       if (evento) eventos.set(item.access_key as string, [...(eventos.get(item.access_key as string) ?? []), evento]);
     }
   }
-  return [...notas.values()].map((nota) => ({ ...nota, eventos: eventos.get(nota.chave) ?? [] }));
+  return [...notas.values()].map((nota) => ({ ...nota, tipo, eventos: eventos.get(nota.chave) ?? [] }));
+}
+
+/** Notas do período, de um tipo ou dos dois (cada nota sabe se é emitida ou recebida). */
+async function notasDoPeriodo(empresaId: string, tipo: TipoEscolha, de: string, ate: string) {
+  const saida: Awaited<ReturnType<typeof notasDaCompetencia>> = [];
+  for (const t of tiposDa(tipo)) saida.push(...await notasDaCompetencia(empresaId, t, de, ate));
+  return saida;
 }
 
 /** Monta o .xlsx (aba Relação + aba Resumo) e o nome do arquivo no padrão da extensão. */
-export async function gerarRelacao(input: { empresaId: string; razaoSocial: string; tipo: TipoRelacao; modelo: ModeloRelacao; competencia: string; agora?: Date }) {
-  const { de, ate } = intervaloDaCompetencia(input.competencia);
-  const notas = await notasDaCompetencia(input.empresaId, input.tipo, de, ate);
-  const linhas = notas.map((nota) => linhaCompleta(nota.xml, nota.eventos)).filter((linha): linha is NonNullable<typeof linha> => Boolean(linha))
-    .sort((a, b) => Number(b.valores["Número NFS-e"] ?? 0) - Number(a.valores["Número NFS-e"] ?? 0));
-  const colunas = input.modelo === "completa" ? CABECALHO_COMPLETA : input.modelo === "retencoes" ? COLUNAS_RETENCOES : COLUNAS_SIMPLES;
+export async function gerarRelacao(input: { empresaId: string; razaoSocial: string; tipo: TipoEscolha; modelo: ModeloRelacao; competencia: string; ate?: string; agora?: Date }) {
+  const { de, ate } = intervaloDoPeriodo(input.competencia, input.ate);
+  const notas = await notasDoPeriodo(input.empresaId, input.tipo, de, ate);
+  const linhas = notas.map((nota) => {
+    const linha = linhaCompleta(nota.xml, nota.eventos);
+    return linha ? { ...linha, tipo: nota.tipo, valores: { ...linha.valores, Tipo: nota.tipo === "emitidas" ? "Emitida" : "Recebida" } as Record<string, unknown> } : null;
+  }).filter((linha): linha is NonNullable<typeof linha> => Boolean(linha))
+    .sort((a, b) => a.tipo.localeCompare(b.tipo) || Number(b.valores["Número NFS-e"] ?? 0) - Number(a.valores["Número NFS-e"] ?? 0));
+  const base = input.modelo === "completa" ? CABECALHO_COMPLETA : input.modelo === "retencoes" ? COLUNAS_RETENCOES : COLUNAS_SIMPLES;
+  // Emitidas e recebidas juntas: a primeira coluna diz qual é qual (dá para filtrar no Excel).
+  const colunas = input.tipo === "ambas" ? ["Tipo", ...base] : base;
 
   const livro = new ExcelJS.Workbook();
   const relacao = livro.addWorksheet("Relação", { views: [{ state: "frozen", ySplit: 1 }] });
@@ -317,11 +339,20 @@ export async function gerarRelacao(input: { empresaId: string; razaoSocial: stri
   for (const situacao of ["Normal", "Cancelada", "Substituída"]) resumo.addRow([situacao, qtd(situacao), valor(situacao)]);
   resumo.addRow(["Total", linhas.length, ["Normal", "Cancelada", "Substituída"].reduce((t, s) => t + valor(s), 0)]).font = { bold: true };
   resumo.addRow([]);
-  if (input.modelo === "retencoes") {
-    // Totais por imposto, só das notas normais (canceladas e substituídas não contam).
-    const normais = linhas.filter((l) => l.situacao === "Normal");
+  if (input.tipo === "ambas") {
+    // Emitidas e recebidas não se somam: cada uma com as suas notas normais.
+    resumo.addRow(["Só normais, por tipo", "Qtd", "Valor (R$)"]).font = { bold: true };
+    for (const t of ["emitidas", "recebidas"] as const) {
+      const doTipo = linhas.filter((l) => l.tipo === t && l.situacao === "Normal");
+      resumo.addRow([ROTULO_TIPO[t], doTipo.length, doTipo.reduce((s, l) => s + Number(l.valores["Valor do Serviço (R$)"] ?? 0), 0)]);
+    }
+    resumo.addRow([]);
+  }
+  for (const t of input.modelo === "retencoes" ? tiposDa(input.tipo) : []) {
+    // Totais por imposto, só das notas normais (canceladas e substituídas não contam); separados por tipo.
+    const normais = linhas.filter((l) => l.situacao === "Normal" && l.tipo === t);
     const soma = (coluna: string) => normais.reduce((t, l) => t + Number(l.valores[coluna] ?? 0), 0);
-    resumo.addRow(["Retenções (só normais)", "Notas", "Valor (R$)"]).font = { bold: true };
+    resumo.addRow([input.tipo === "ambas" ? `Retenções das ${ROTULO_TIPO[t].toLowerCase()} (só normais)` : "Retenções (só normais)", "Notas", "Valor (R$)"]).font = { bold: true };
     for (const [rotulo, coluna] of [["ISSQN", "ISSQN Retido (R$)"], ["IRRF", "IRRF Retido (R$)"], ["INSS", "INSS Retido (R$)"], ["PIS/COFINS/CSLL", "PIS/COFINS/CSLL Retidos (R$)"]] as const) {
       resumo.addRow([rotulo, normais.filter((l) => Number(l.valores[coluna] ?? 0) > 0).length, soma(coluna)]);
     }
@@ -336,7 +367,7 @@ export async function gerarRelacao(input: { empresaId: string; razaoSocial: stri
 
   const dia = (iso: string) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
   const carimbo = `${parte("day")}${parte("month")}${parte("year")}-${parte("hour")}${parte("minute")}${parte("second")}`;
-  const nome = `${input.razaoSocial.replace(/[\\/:*?"<>|]+/g, " ").trim()} - ${input.tipo === "emitidas" ? "Emitidas" : "Recebidas"} - ${input.modelo === "completa" ? "Completa" : input.modelo === "retencoes" ? "Retenções" : "Simples"} - ${dia(de)} a ${dia(ate)} - ${carimbo}.xlsx`;
+  const nome = `${input.razaoSocial.replace(/[\\/:*?"<>|]+/g, " ").trim()} - ${ROTULO_TIPO[input.tipo]} - ${input.modelo === "completa" ? "Completa" : input.modelo === "retencoes" ? "Retenções" : "Simples"} - ${dia(de)} a ${dia(ate)} - ${carimbo}.xlsx`;
   return { arquivo: new Uint8Array(await livro.xlsx.writeBuffer()), nome, quantidade: linhas.length };
 }
 
@@ -362,14 +393,14 @@ const nomeSeguro = (texto: string) => texto.replace(/[\\/:*?"<>|\x00-\x1f]+/g, "
  * Os arquivos das NFS-e da competência num .zip: o XML oficial de cada nota ou o DANFS-e (montado do XML, no leiaute
  * nacional, com a marca de cancelada/substituída). Um arquivo por nota: "<Emitida|Recebida> - <número> - <contraparte>".
  */
-export async function gerarArquivosNotas(input: { empresaId: string; razaoSocial: string; tipo: TipoRelacao; formato: FormatoArquivos; competencia: string; agora?: Date }) {
-  const { de, ate } = intervaloDaCompetencia(input.competencia);
+export async function gerarArquivosNotas(input: { empresaId: string; razaoSocial: string; tipo: TipoEscolha; formato: FormatoArquivos; competencia: string; ate?: string; agora?: Date }) {
+  const { de, ate } = intervaloDoPeriodo(input.competencia, input.ate);
   // Conta antes de baixar os XML (as notas do ADN são quase todas); confere de novo com as nossas que o ADN ainda não devolveu.
   const { count } = await createAdminClient().from("received_documents").select("access_key", { count: "exact", head: true })
     .eq("organization_id", input.empresaId).eq("environment", getConfiguredNFSeEnvironment()).eq("document_type", "NFSE")
-    .in("role", input.tipo === "emitidas" ? ["PRESTADOR"] : ["TOMADOR", "INTERMEDIARIO"]).gte("competence", de).lte("competence", ate);
+    .in("role", tiposDa(input.tipo).flatMap((t) => PAPEIS[t])).gte("competence", de).lte("competence", ate);
   if ((count ?? 0) > LIMITE_ARQUIVOS_NOTAS) throw new RelacaoGrandeDemais(count!);
-  const notas = await notasDaCompetencia(input.empresaId, input.tipo, de, ate);
+  const notas = await notasDoPeriodo(input.empresaId, input.tipo, de, ate);
   if (notas.length > LIMITE_ARQUIVOS_NOTAS) throw new RelacaoGrandeDemais(notas.length);
   const zip = new JSZip();
   const usados = new Set<string>();
@@ -377,10 +408,12 @@ export async function gerarArquivosNotas(input: { empresaId: string; razaoSocial
   for (const nota of notas) {
     const linha = linhaCompleta(nota.xml, nota.eventos);
     const numero = String(linha?.valores["Número NFS-e"] ?? nota.chave.slice(-15));
-    const contraparte = String((input.tipo === "emitidas" ? linha?.valores["Nome Tomador"] : linha?.valores["Nome Prestador"]) ?? "");
-    let base = nomeSeguro(`${input.tipo === "emitidas" ? "Emitida" : "Recebida"} - ${numero}${contraparte ? ` - ${contraparte}` : ""}`);
+    const contraparte = String((nota.tipo === "emitidas" ? linha?.valores["Nome Tomador"] : linha?.valores["Nome Prestador"]) ?? "");
+    let base = nomeSeguro(`${nota.tipo === "emitidas" ? "Emitida" : "Recebida"} - ${numero}${contraparte ? ` - ${contraparte}` : ""}`);
     if (usados.has(base)) base = `${base} - ${nota.chave.slice(-8)}`;
     usados.add(base);
+    // As duas juntas: uma pasta para cada dentro do .zip.
+    if (input.tipo === "ambas") base = `${nota.tipo === "emitidas" ? "Emitidas" : "Recebidas"}/${base}`;
     if (input.formato === "xml") {
       zip.file(`${base}.xml`, nota.xml);
     } else {
@@ -391,6 +424,6 @@ export async function gerarArquivosNotas(input: { empresaId: string; razaoSocial
     quantidade++;
   }
   const dia = (iso: string) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
-  const nome = `${input.razaoSocial.replace(/[\\/:*?"<>|]+/g, " ").trim()} - ${input.tipo === "emitidas" ? "Emitidas" : "Recebidas"} - ${input.formato.toUpperCase()} - ${dia(de)} a ${dia(ate)} - ${carimboAgora(input.agora ?? new Date())}.zip`;
+  const nome = `${input.razaoSocial.replace(/[\\/:*?"<>|]+/g, " ").trim()} - ${ROTULO_TIPO[input.tipo]} - ${input.formato.toUpperCase()} - ${dia(de)} a ${dia(ate)} - ${carimboAgora(input.agora ?? new Date())}.zip`;
   return { arquivo: await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" }), nome, quantidade };
 }

@@ -16,7 +16,7 @@ import { gerarDanfsePdf } from "@/lib/nfse/danfse/pdf";
  * fora deste emissor) e, nas emitidas, as nossas que o ADN ainda não devolveu.
  */
 export type TipoRelacao = "emitidas" | "recebidas";
-export type ModeloRelacao = "simples" | "completa";
+export type ModeloRelacao = "simples" | "completa" | "retencoes";
 export type FormatoArquivos = "xml" | "pdf";
 
 type No = Record<string, unknown>;
@@ -99,6 +99,11 @@ type Nota = { chave: string; xml: string };
 
 const CABECALHO_COMPLETA = ["Número NFS-e", "Data Geração", "Competência", "CNPJ/CPF Prestador", "Nome Prestador", "CNPJ/CPF Tomador", "Nome Tomador", "Município Serviço", "Valor do Serviço (R$)", "Insc. Municipal Emitente", "Simples Nacional", "DPS Nº", "DPS Série", "Situação NFS-e", "Tributação do ISSQN", "Município de Incidência", "Desconto Incond. (R$)", "Base de Cálculo (R$)", "Alíquota ISSQN (%)", "Valor do ISSQN (R$)", "Retenção ISSQN", "Cód. Tributação Nacional", "Item da NBS", "Descrição do Serviço", "CST IBS/CBS", "Class. Tributária IBS/CBS", "Indicador da Operação", "BC IBS/CBS (R$)", "Reemb./Repasse/Ressarc. (R$)", "Alíquota CBS (%)", "Red. Alíquota CBS (%)", "Alíq. Efetiva CBS (%)", "Valor CBS Total (R$)", "Alíquota IBS Estadual (%)", "Red. Alíq. IBS Estadual (%)", "Alíq. Efetiva IBS Estadual (%)", "Valor IBS Estadual (R$)", "Alíquota IBS Municipal (%)", "Red. Alíq. IBS Municipal (%)", "Alíq. Efetiva IBS Municipal (%)", "Valor IBS Municipal (R$)", "Valor IBS Total (R$)", "Sit. Trib. PIS/COFINS", "BC PIS/COFINS (R$)", "PIS - Alíquota (%)", "PIS - Débito (R$)", "COFINS - Alíquota (%)", "COFINS - Débito (R$)", "Descr. Contrib. Sociais Ret.", "IRRF (R$)", "Contrib. Sociais Ret. (R$)", "Contrib. Previd. Ret. (R$)", "% Total Tributos (SN)", "Insc. Municipal Tomador", "Informações Complementares", "Evento", "Autor do Evento", "Data do Evento", "Data Registro do Evento", "Situação", "Chave NFS-e"];
 const COLUNAS_SIMPLES = ["Número NFS-e", "Data Geração", "Competência", "CNPJ/CPF Prestador", "Nome Prestador", "CNPJ/CPF Tomador", "Nome Tomador", "Município Serviço", "Valor do Serviço (R$)", "Valor do ISSQN (R$)", "Retenção ISSQN", "Cód. Tributação Nacional", "Situação", "Chave NFS-e"];
+/**
+ * Relação com retenções (pedido da Patricia, 27/11/2026): por nota, o que o tomador reteve e o líquido. Os nomes seguem o
+ * DANFS-e oficial: "Contribuições Sociais - Retidas" é PIS, COFINS e CSLL juntos (vRetCSLL); a previdenciária é o INSS (vRetCP).
+ */
+const COLUNAS_RETENCOES = ["Número NFS-e", "Data Geração", "Competência", "CNPJ/CPF Prestador", "Nome Prestador", "CNPJ/CPF Tomador", "Nome Tomador", "Valor do Serviço (R$)", "Retenção ISSQN", "ISSQN Retido (R$)", "IRRF Retido (R$)", "INSS Retido (R$)", "PIS/COFINS/CSLL Retidos (R$)", "Descr. Contrib. Sociais Ret.", "Total Retido (R$)", "Valor Líquido (R$)", "Situação", "Chave NFS-e"];
 const DATAS = new Set(["Data Geração"]);
 const PERCENTUAIS = new Set(CABECALHO_COMPLETA.filter((c) => c.includes("(%)")));
 
@@ -201,6 +206,18 @@ export function linhaCompleta(xml: string, eventos: Evento[]): { valores: Record
       "Data Registro do Evento": evento ? dataHoraEvento(evento.registro) : null,
       "Situação": situacao,
       "Chave NFS-e": (texto(inf, "@_Id") ?? "").replace(/^NFS/, ""),
+      // Só na relação com retenções.
+      ...(() => {
+        const iss = ["2", "3"].includes(texto(tribMun, "tpRetISSQN") ?? "") ? numero(vNfse, "vISSQN") ?? 0 : 0;
+        const irrf = numero(tribFed, "vRetIRRF") ?? 0, inss = numero(tribFed, "vRetCP") ?? 0, sociais = numero(tribFed, "vRetCSLL") ?? 0;
+        const total = Math.round((iss + irrf + inss + sociais) * 100) / 100;
+        const servico = numero(vDps, "vServPrest", "vServ") ?? 0;
+        return {
+          "ISSQN Retido (R$)": iss, "IRRF Retido (R$)": irrf, "INSS Retido (R$)": inss, "PIS/COFINS/CSLL Retidos (R$)": sociais, "Total Retido (R$)": total,
+          // O líquido oficial da nota; sem ele, serviço menos o retido.
+          "Valor Líquido (R$)": numero(vNfse, "vLiq") ?? Math.round((servico - total) * 100) / 100,
+        };
+      })(),
     },
   };
 }
@@ -263,7 +280,7 @@ export async function gerarRelacao(input: { empresaId: string; razaoSocial: stri
   const notas = await notasDaCompetencia(input.empresaId, input.tipo, de, ate);
   const linhas = notas.map((nota) => linhaCompleta(nota.xml, nota.eventos)).filter((linha): linha is NonNullable<typeof linha> => Boolean(linha))
     .sort((a, b) => Number(b.valores["Número NFS-e"] ?? 0) - Number(a.valores["Número NFS-e"] ?? 0));
-  const colunas = input.modelo === "completa" ? CABECALHO_COMPLETA : COLUNAS_SIMPLES;
+  const colunas = input.modelo === "completa" ? CABECALHO_COMPLETA : input.modelo === "retencoes" ? COLUNAS_RETENCOES : COLUNAS_SIMPLES;
 
   const livro = new ExcelJS.Workbook();
   const relacao = livro.addWorksheet("Relação", { views: [{ state: "frozen", ySplit: 1 }] });
@@ -300,6 +317,18 @@ export async function gerarRelacao(input: { empresaId: string; razaoSocial: stri
   for (const situacao of ["Normal", "Cancelada", "Substituída"]) resumo.addRow([situacao, qtd(situacao), valor(situacao)]);
   resumo.addRow(["Total", linhas.length, ["Normal", "Cancelada", "Substituída"].reduce((t, s) => t + valor(s), 0)]).font = { bold: true };
   resumo.addRow([]);
+  if (input.modelo === "retencoes") {
+    // Totais por imposto, só das notas normais (canceladas e substituídas não contam).
+    const normais = linhas.filter((l) => l.situacao === "Normal");
+    const soma = (coluna: string) => normais.reduce((t, l) => t + Number(l.valores[coluna] ?? 0), 0);
+    resumo.addRow(["Retenções (só normais)", "Notas", "Valor (R$)"]).font = { bold: true };
+    for (const [rotulo, coluna] of [["ISSQN", "ISSQN Retido (R$)"], ["IRRF", "IRRF Retido (R$)"], ["INSS", "INSS Retido (R$)"], ["PIS/COFINS/CSLL", "PIS/COFINS/CSLL Retidos (R$)"]] as const) {
+      resumo.addRow([rotulo, normais.filter((l) => Number(l.valores[coluna] ?? 0) > 0).length, soma(coluna)]);
+    }
+    resumo.addRow(["Total retido", normais.filter((l) => Number(l.valores["Total Retido (R$)"] ?? 0) > 0).length, soma("Total Retido (R$)")]).font = { bold: true };
+    resumo.addRow(["Valor líquido", normais.length, soma("Valor Líquido (R$)")]);
+    resumo.addRow([]);
+  }
   const agora = input.agora ?? new Date();
   const local = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(agora);
   const parte = (tipo: string) => local.find((p) => p.type === tipo)?.value ?? "";
@@ -307,7 +336,7 @@ export async function gerarRelacao(input: { empresaId: string; razaoSocial: stri
 
   const dia = (iso: string) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
   const carimbo = `${parte("day")}${parte("month")}${parte("year")}-${parte("hour")}${parte("minute")}${parte("second")}`;
-  const nome = `${input.razaoSocial.replace(/[\\/:*?"<>|]+/g, " ").trim()} - ${input.tipo === "emitidas" ? "Emitidas" : "Recebidas"} - ${input.modelo === "completa" ? "Completa" : "Simples"} - ${dia(de)} a ${dia(ate)} - ${carimbo}.xlsx`;
+  const nome = `${input.razaoSocial.replace(/[\\/:*?"<>|]+/g, " ").trim()} - ${input.tipo === "emitidas" ? "Emitidas" : "Recebidas"} - ${input.modelo === "completa" ? "Completa" : input.modelo === "retencoes" ? "Retenções" : "Simples"} - ${dia(de)} a ${dia(ate)} - ${carimbo}.xlsx`;
   return { arquivo: new Uint8Array(await livro.xlsx.writeBuffer()), nome, quantidade: linhas.length };
 }
 

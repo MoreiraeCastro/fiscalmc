@@ -10,14 +10,14 @@ export const dynamic = "force-dynamic";
 // O .zip de PDF monta um DANFS-e por nota (até LIMITE_ARQUIVOS_NOTAS).
 export const maxDuration = 300;
 
-/** Relação de NFS-e da empresa escolhida, por competência: ?tipo=emitidas|recebidas&modelo=simples|completa|xml|pdf&competencia=AAAA-MM (xml e pdf saem num .zip, um arquivo por nota). */
+/** Relação de NFS-e da empresa escolhida, por competência: ?tipo=emitidas|recebidas&modelo=simples|completa|retencoes|xml|pdf&competencia=AAAA-MM (xml e pdf saem num .zip, um arquivo por nota). */
 export async function GET(request: Request) {
   const { empresa, usuarioId, escritorio } = await exigirEmpresa();
   const params = new URL(request.url).searchParams;
   const tipo = params.get("tipo");
   const modelo = params.get("modelo");
   const competencia = params.get("competencia") ?? "";
-  if ((tipo !== "emitidas" && tipo !== "recebidas") || (modelo !== "simples" && modelo !== "completa" && modelo !== "xml" && modelo !== "pdf") || !/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)) {
+  if ((tipo !== "emitidas" && tipo !== "recebidas") || (modelo !== "simples" && modelo !== "completa" && modelo !== "retencoes" && modelo !== "xml" && modelo !== "pdf") || !/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)) {
     return NextResponse.json({ error: "Escolha o tipo, a competência e o modelo." }, { status: 400 });
   }
   const arquivos = modelo === "xml" || modelo === "pdf";

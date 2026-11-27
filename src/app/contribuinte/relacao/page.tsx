@@ -31,6 +31,7 @@ export default async function RelacaoPage() {
         <div className="pc-relacao-botoes">
           <button className="pc-botao secundario" type="submit" name="modelo" value="simples"><FileSpreadsheet size={16} aria-hidden />Relação simples</button>
           <button className="pc-botao" type="submit" name="modelo" value="completa"><FileSpreadsheet size={16} aria-hidden />Relação completa</button>
+          <button className="pc-botao secundario" type="submit" name="modelo" value="retencoes"><FileSpreadsheet size={16} aria-hidden />Relação com retenções</button>
           <button className="pc-botao secundario" type="submit" name="modelo" value="xml"><FileCode size={16} aria-hidden />XML das notas</button>
           <button className="pc-botao secundario" type="submit" name="modelo" value="pdf"><FileText size={16} aria-hidden />PDF das notas</button>
         </div>

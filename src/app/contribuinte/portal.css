@@ -373,27 +373,10 @@ button.pc-link { justify-self: start; margin-top: 8px; padding: 0; border: 0; ba
 .pc-competencia-meses button.ativo { background: var(--accent-soft); color: var(--accent-dark); font-weight: 600; }
 .pc-competencia-meses button:disabled { color: rgba(15,23,42,.22); cursor: default; }
 
-/* Relação de NFS-e: escolher as notas e a competência, depois o que baixar (cartões). */
-.pc-rel { display: grid; gap: 22px; }
-.pc-rel-topo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 28px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
-.pc-rel-campo { display: grid; gap: 7px; }
-.pc-rel-campo > span { font-size: 12px; font-weight: 500; color: var(--text-2); }
-.pc-seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-sunken); }
-.pc-seg label { position: relative; }
-.pc-seg input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
-.pc-seg span { display: block; min-width: 92px; padding: 6px 14px; border-radius: calc(var(--r-sm) - 2px); font-size: 13px; text-align: center; color: var(--text-2); transition: background .12s, color .12s, box-shadow .12s; }
-.pc-seg input:checked + span { background: var(--card); color: var(--ink-strong); font-weight: 500; box-shadow: 0 1px 2px rgba(15, 23, 42, .08), 0 0 0 1px rgba(15, 23, 42, .06); }
-.pc-seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
-.pc-rel-grupo { display: grid; gap: 10px; }
-.pc-rel-grupo h3 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.pc-rel-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
-.pc-rel-opcao { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 14px 14px 14px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--card); color: inherit; font: inherit; text-align: left; cursor: pointer; transition: border-color .14s, box-shadow .14s, background .14s; }
-.pc-rel-opcao:hover { border-color: var(--line-strong); box-shadow: 0 2px 10px -6px rgba(15, 23, 42, .25); }
-.pc-rel-opcao:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.pc-rel-icone { display: grid; place-items: center; width: 38px; height: 38px; border-radius: var(--r-sm); background: var(--accent-soft); color: var(--accent-dark); }
-.pc-rel-texto { display: grid; gap: 2px; min-width: 0; }
-.pc-rel-texto strong { font-size: 13.5px; font-weight: 600; color: var(--ink-strong); }
-.pc-rel-texto small { font-size: 12px; line-height: 1.4; color: var(--muted); }
-.pc-rel-baixar { color: var(--muted); transition: color .14s, transform .14s; }
-.pc-rel-opcao:hover .pc-rel-baixar { color: var(--accent-dark); transform: translateY(1px); }
-@media (max-width: 560px) { .pc-rel-grade { grid-template-columns: 1fr; } }
+/* Relação de NFS-e: filtros (notas e competência) e a tabela do que baixar. */
+.pc-rel { display: grid; gap: 14px; }
+.pc-rel-filtros { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
+.pc-rel-filtros label { display: grid; gap: 6px; font-size: 12px; font-weight: 500; color: var(--ink); }
+.pc-rel-filtros select { min-width: 170px; }
+.pc-rel-acao { width: 1%; text-align: right; white-space: nowrap; }
+.pc-rel .pc-cartao > .pc-tabela-rolagem:last-child { margin-bottom: -18px; border-bottom: 0; }
